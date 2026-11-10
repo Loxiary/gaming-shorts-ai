@@ -1,3 +1,4 @@
+import { ApiSettingsCard } from "../analysis/ApiSettingsCard";
 import { ErrorBox, Loading } from "../../components/Feedback";
 import { formatBytes } from "../../services/format";
 import { useSystem } from "../../services/queries";
@@ -13,9 +14,10 @@ export function SettingsPage() {
     <section>
       <h1>Paramètres</h1>
       <p className="muted">
-        Configuration en lecture seule. Pour la modifier, éditez le fichier <code>.env</code> à la
-        racine du projet puis redémarrez l'application (<code>scripts\stop.ps1</code> puis{" "}
-        <code>scripts\start.ps1</code>).
+        L'autorisation des appels payants et le plafond mensuel se règlent ici. Le reste de la
+        configuration se modifie dans le fichier <code>.env</code> à la racine du projet, puis en
+        redémarrant l'application (<code>scripts\stop.ps1</code> puis <code>scripts\start.ps1</code>
+        ).
       </p>
 
       <div className="card">
@@ -52,6 +54,8 @@ export function SettingsPage() {
           </div>
         </dl>
       </div>
+
+      <ApiSettingsCard />
 
       <div className="card">
         <h2>Transcription et GPU</h2>

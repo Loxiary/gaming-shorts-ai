@@ -47,7 +47,14 @@ def ingest_step(ctx: StepContext) -> dict[str, Any] | None:
     return INGEST_STEPS[ctx.step_name](ctx)
 
 
+def analyze_step(ctx: StepContext) -> dict[str, Any] | None:
+    from app.workers.pipeline.analyze import ANALYZE_STEPS
+
+    return ANALYZE_STEPS[ctx.step_name](ctx)
+
+
 HANDLERS: dict[str, StepHandler] = {
+    "analyze_clips": analyze_step,
     "demo": demo_step,
     "demo_failure": demo_failure_step,
     "ingest_youtube": ingest_step,

@@ -7,6 +7,8 @@ const NAV = [
   { to: "/importer", label: "Importer", end: false },
   { to: "/projets", label: "Bibliothèque", end: false },
   { to: "/file", label: "File d'attente", end: false },
+  { to: "/profils", label: "Profils", end: false },
+  { to: "/couts", label: "Coûts API", end: false },
   { to: "/parametres", label: "Paramètres", end: false },
 ];
 
@@ -61,8 +63,8 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 2.</strong> Import YouTube et transcription locale disponibles. L'analyse
-            IA des moments, la détection des clips et le montage vidéo ne sont{" "}
+            <strong>Phase 3.</strong> Import, transcription et détection des clips disponibles. Le
+            montage vidéo, les sous-titres et l'export ne sont{" "}
             <strong>pas encore implémentés</strong>.
           </div>
           <div className="status-pills" aria-live="polite">

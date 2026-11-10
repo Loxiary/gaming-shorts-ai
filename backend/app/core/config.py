@@ -9,12 +9,12 @@ import ipaddress
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.2.0"
-APP_PHASE = "Phase 2 — import et transcription"
+APP_VERSION = "0.3.0"
+APP_PHASE = "Phase 3 — analyse et détection des clips"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
@@ -54,6 +54,23 @@ class Settings(BaseSettings):
     whisper_vad: bool = True
     whisper_beam_size: int = Field(default=5, ge=1, le=10)
 
+    # --- Analyse des clips (Phase 3)
+    # Clé lue depuis .env ou l'environnement (ANTHROPIC_API_KEY, sans préfixe GSA_).
+    # Jamais journalisée ni renvoyée par l'API.
+    anthropic_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("ANTHROPIC_API_KEY", "GSA_ANTHROPIC_API_KEY")
+    )
+    llm_model: str = "claude-sonnet-5-5"
+    llm_effort: str = "medium"  # low | medium | high
+    # Tarifs en $ par million de jetons (à mettre à jour si Anthropic change ses prix).
+    llm_price_input_per_mtok: float = Field(default=2.0, ge=0)
+    llm_price_output_per_mtok: float = Field(default=10.0, ge=0)
+    llm_price_cache_read_per_mtok: float = Field(default=0.10, ge=0)
+    llm_price_cache_write_per_mtok: float = Field(default=2.50, ge=0)
+    default_monthly_cap_usd: float = Field(default=40.0, ge=0)
+    analysis_proxy_height: int = Field(default=480, ge=240, le=1080)
+    frames_per_candidate: int = Field(default=8, ge=0, le=20)
+
     @field_validator("data_dir")
     @classmethod
     def _absolute_data_dir(cls, value: Path) -> Path:
@@ -87,6 +104,14 @@ class Settings(BaseSettings):
         value = value.strip().lower()
         if value and not (value.isalpha() and 2 <= len(value) <= 3):
             raise ValueError("GSA_WHISPER_LANGUAGE doit être un code langue (ex. fr, en) ou vide")
+        return value
+
+    @field_validator("llm_effort")
+    @classmethod
+    def _valid_effort(cls, value: str) -> str:
+        value = value.lower()
+        if value not in {"low", "medium", "high"}:
+            raise ValueError("GSA_LLM_EFFORT doit valoir low, medium ou high")
         return value
 
     @field_validator("log_level")

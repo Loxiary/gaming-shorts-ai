@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { ProjectForm } from "./ProjectForm";
 import { SourcePanel } from "./SourcePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
+import { AnalysisPanel } from "../analysis/AnalysisPanel";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmptyState, ErrorBox, Loading } from "../../components/Feedback";
 import { JobCard } from "../../components/JobCard";
@@ -27,6 +28,26 @@ export function ProjectDetailPage() {
   const createJob = useCreateJob();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const stopAt = useRef<number | null>(null);
+
+  // Lecture d'un extrait : saut au début, arrêt automatique à la fin.
+  const previewRange = useCallback((start: number, end: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    stopAt.current = end;
+    video.currentTime = start;
+    video.scrollIntoView({ behavior: "smooth", block: "center" });
+    const onTime = () => {
+      if (stopAt.current != null && video.currentTime >= stopAt.current) {
+        video.pause();
+        stopAt.current = null;
+        video.removeEventListener("timeupdate", onTime);
+      }
+    };
+    video.addEventListener("timeupdate", onTime);
+    void video.play().catch(() => undefined);
+  }, []);
 
   if (project.isPending) return <Loading />;
   if (project.isError) {
@@ -117,11 +138,21 @@ export function ProjectDetailPage() {
 
       {p.source && <SourcePanel key={p.source.id} projectId={p.id} source={p.source} />}
 
+      {p.source && (
+        <AnalysisPanel
+          projectId={p.id}
+          ready={Boolean(p.transcript && p.source.media_available)}
+          jobs={p.jobs}
+          onPreview={previewRange}
+        />
+      )}
+
       {p.transcript ? (
         <TranscriptPanel
           projectId={p.id}
           summary={p.transcript}
           mediaAvailable={p.source?.media_available ?? false}
+          videoRef={videoRef}
         />
       ) : (
         p.source && (

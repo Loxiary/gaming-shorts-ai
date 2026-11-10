@@ -138,3 +138,129 @@ class FakeTranscriber:
                 SegmentResult(start=1.6, end=2.9, text="On a réussi la mission."),
             ],
         )
+
+
+# --------------------------------------------------------------------------- Phase 3
+
+
+def make_bursty_video(
+    path: Path, seconds: float = 150.0, bursts: tuple[float, ...] = (40, 100)
+) -> Path:
+    """Vidéo synthétique dont l'audio est calme sauf de courtes rafales fortes (moments forts)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cond = "+".join(f"between(t,{b},{b + 4})" for b in bursts) or "0"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc2=size=320x240:rate=15:duration={seconds}",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency=330:sample_rate=44100:duration={seconds}",
+            "-filter_complex",
+            f"[1:a]volume='if({cond},1.0,0.03)':eval=frame[a]",
+            "-map",
+            "0:v",
+            "-map",
+            "[a]",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
+class SpeechTranscriber(FakeTranscriber):
+    """Une phrase toutes les 8 s sur toute la durée (mots horodatés)."""
+
+    def __init__(self, seconds: float) -> None:
+        super().__init__()
+        self.seconds = seconds
+
+    def transcribe(self, audio_path, on_progress, check_cancel):  # type: ignore[no-untyped-def]
+        base = super().transcribe(audio_path, on_progress, check_cancel)
+        segments = []
+        t = 1.0
+        i = 0
+        while t + 5 < self.seconds:
+            words = [WordResult(start=t + k, end=t + k + 0.8, word=f" mot{k}") for k in range(5)]
+            segments.append(
+                SegmentResult(start=t, end=t + 5, text=f"Phrase numéro {i} du test.", words=words)
+            )
+            t += 8
+            i += 1
+        return base.model_copy(
+            update={"segments": segments, "audio_duration_seconds": self.seconds}
+        )
+
+
+class FakeJudge:
+    """IA simulée : notes fixes, coût fictif enregistré, budget vérifié comme le vrai juge."""
+
+    model = "fake-claude"
+    configured = True
+
+    def __init__(self, score: int = 8, fail_on: set[int] | None = None) -> None:
+        self.score = score
+        self.calls = 0
+        self.fail_on = fail_on or set()
+        self.inputs = []
+
+    def judge(self, context, item, budget_check, record_usage):  # type: ignore[no-untyped-def]
+        from app.analysis.judge import (
+            ClipAssessment,
+            CriterionAssessment,
+            JudgeResult,
+            KeyEvent,
+            Usage,
+        )
+
+        budget_check(0.01)
+        self.calls += 1
+        self.inputs.append(item)
+        if self.calls in self.fail_on:
+            raise StepError("Connexion à l'API Anthropic impossible.")
+        crit = CriterionAssessment(score=self.score, justification="Justification simulée.")
+        assessment = ClipAssessment(
+            summary="Résumé factuel simulé.",
+            reason="Raison simulée.",
+            hook=crit,
+            entertainment=crit,
+            standalone=crit,
+            narrative=crit,
+            retention=crit,
+            originality=crit,
+            av_quality=crit,
+            confidence=0.8,
+            key_events=[KeyEvent(t=item.start + 5, description="Événement simulé")],
+            suggested_start=item.start,
+            suggested_end=item.end,
+            self_contained=True,
+            warnings=[],
+        )
+        result = JudgeResult(
+            "scored",
+            self.model,
+            assessment=assessment,
+            usage=Usage(input_tokens=5000, output_tokens=1000),
+            request_id=f"req_{self.calls}",
+            raw=assessment.model_dump_json(),
+        )
+        record_usage(result, len(item.frames))
+        return result

@@ -10,11 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import routes_jobs, routes_projects, routes_system
+from app.api import routes_analysis, routes_jobs, routes_projects, routes_system
 from app.core.config import APP_NAME, APP_VERSION, Settings, get_settings
 from app.core.errors import AppError, DatabaseNotReadyError
 from app.core.logging import configure_logging
 from app.db.session import create_db_engine, create_session_factory, ensure_database_ready
+from app.services.profiles import ensure_default_profiles
 
 logger = logging.getLogger("app.api")
 
@@ -33,6 +34,8 @@ def create_app(settings: Settings | None = None, *, configure_logs: bool = True)
         try:
             ensure_database_ready(engine, settings)
             app.state.db_ready = True
+            with app.state.session_factory() as session:
+                ensure_default_profiles(session)
         except DatabaseNotReadyError as exc:
             app.state.db_ready = False
             logger.error(exc.message)
@@ -44,7 +47,7 @@ def create_app(settings: Settings | None = None, *, configure_logs: bool = True)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
 
@@ -71,4 +74,5 @@ def create_app(settings: Settings | None = None, *, configure_logs: bool = True)
     app.include_router(routes_system.router)
     app.include_router(routes_projects.router)
     app.include_router(routes_jobs.router)
+    app.include_router(routes_analysis.router)
     return app

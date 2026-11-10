@@ -2,10 +2,11 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 2 — import et transcription.** L'application importe des vidéos YouTube
-> (publiques ou non répertoriées), les télécharge, les analyse avec ffprobe, extrait l'audio et
-> produit une **transcription source horodatée en local** (faster-whisper, GPU). L'analyse IA des
-> moments, la détection/le score des clips et le montage vidéo **ne sont pas encore implémentés**.
+> **État actuel : Phase 3 — analyse et détection des clips.** L'application importe des vidéos
+> YouTube, les transcrit en local, puis **détecte les moments forts et propose des extraits de 61 à
+> 180 s**, notés sur 7 critères et expliqués (IA Claude avec plafond de dépenses, ou estimation par
+> signaux sans IA), avec profils de montage et seuil réglable. Le **montage vidéo, les sous-titres,
+> le rapport de risques et l'export ne sont pas encore implémentés**.
 
 Documents de référence (racine du dépôt) : `CAHIER_DES_CHARGES.md`, `ARCHITECTURE_TECHNIQUE.md`,
 `CLAUDE_INSTRUCTIONS.md`, `PROMPT_INITIAL_CLAUDE_CODE.txt`. Audit machine : `docs/ENVIRONNEMENT.md`.
@@ -64,6 +65,37 @@ enregistre sa sortie (mesures, versions, chemins) dans `job_steps.output_json` (
 La transcription produite est la **transcription source verbatim** (`kind = "source"`) ; les
 futures traductions seront stockées séparément.
 
+### Pipeline d'analyse (`analyze_clips`)
+
+Lancé depuis la fiche d'un projet (profil + mode d'évaluation). L'analyse n'envoie jamais la
+vidéo entière à une API : seulement l'extrait de transcription, un résumé des signaux et quelques
+images réduites de chaque candidat.
+
+| Étape | Rôle |
+|---|---|
+| `preparing_proxy` | Copie légère H.264 480p 10 i/s (décodage AV1 matériel NVIDIA si possible), réutilisée |
+| `detecting_scenes` | Changements de scène (filtre FFmpeg `scdet`), stockés par source et réutilisés |
+| `analyzing_audio` | Énergie sonore relative, débit de parole, densité de coupes → courbe d'« intérêt » par seconde |
+| `generating_candidates` | Fenêtres de 61 à 180 s (bornes du profil) autour des pics, calées en priorité sur des **phrases complètes** (ponctuation des mots horodatés), doublons éliminés ; vidéo trop courte → aucun extrait, avec une note |
+| `sampling_frames` | ~8 images horodatées par extrait (début, pics d'intérêt et sonores, répartition) |
+| `scoring_candidates` | **IA** (Claude Sonnet 5.5, sortie JSON validée, une relance si invalide) ou **signaux seuls** (gratuit, confiance 25 %, clairement signalé). Un extrait déjà évalué n'est jamais renvoyé à l'IA lors d'une reprise |
+| `selecting_clips` | Note globale = moyenne pondérée (profil) ×10 ; seuil ; chevauchements > 30 % retirés |
+
+**Critères (0–10)** : force de l'accroche, divertissement / intensité, compréhension autonome,
+progression narrative, potentiel de rétention, originalité / valeur ajoutée, qualité
+audio-visuelle. Chaque note est justifiée ; les notes sont des estimations, pas des prédictions
+de vues. Le seuil peut être changé après coup (« Appliquer le seuil ») sans nouvel appel payant.
+
+**Coûts** : le plafond mensuel (40 $ par défaut, modifiable dans Paramètres) est vérifié
+**avant chaque appel** avec une estimation haute (jetons comptés + sortie maximale). S'il est
+atteint en cours d'analyse, les extraits restants sont évalués par signaux et une note
+l'indique. Chaque appel est journalisé (jetons, images, coût, identifiant de requête) dans
+« Coûts API ». Sur une vidéo de 10 min, l'estimation est d'environ 0,30 $ (12 extraits).
+
+**Profils** : 5 profils d'exemple (GTA 6 — Viral / Humour / Action, Gaming — Immersion /
+Histoire), modifiables, duplicables, supprimables (sauf le profil par défaut). Chaque analyse
+garde une copie des réglages du profil utilisé.
+
 ### Droits
 
 Le statut des droits (inconnu / créateur / autorisation / licence) est une **déclaration de
@@ -88,6 +120,15 @@ géoblocage, protection anti-robot) : ces cas échouent avec un message explicit
 | PATCH | `/api/projects/{id}/source` | Modifier la déclaration de droits |
 | GET | `/api/projects/{id}/transcript` | Transcription source avec segments et mots horodatés |
 | GET | `/api/projects/{id}/media` | Vidéo source (lecture locale, requêtes Range) |
+| GET/POST | `/api/profiles`, PUT/DELETE `/api/profiles/{id}`, POST `/api/profiles/{id}/duplicate` | Profils de montage |
+| GET | `/api/criteria` | Critères de notation |
+| GET | `/api/projects/{id}/analysis-estimate` | Estimation du coût IA (aucun appel payant) |
+| GET/POST | `/api/projects/{id}/analyses` | Lister / lancer une analyse (`profile_id`, `engine` : auto / llm / signals) |
+| GET | `/api/analyses/{id}` | Analyse avec extraits, notes, explications, images |
+| POST | `/api/analyses/{id}/reselect` | Nouveau seuil, sélection recalculée sans IA |
+| GET | `/api/candidates/{id}/frames/{n}` | Image horodatée d'un extrait |
+| GET/PATCH | `/api/settings/api` | Clé configurée (oui/non, jamais la valeur), API activée, plafond |
+| GET | `/api/costs` | Dépenses du mois, par mois, derniers appels |
 
 Documentation interactive : http://127.0.0.1:8000/docs (quand l'API tourne).
 
@@ -149,7 +190,22 @@ installe `backend\requirements-dev.txt`, exécute `npm ci` dans `frontend\`, app
 | `GSA_WHISPER_VAD` | `true` | Filtre de voix (réduit les hallucinations sur musique/bruit) |
 | `GSA_WHISPER_BEAM_SIZE` | `5` | 5 = plus fidèle, 1 = plus rapide (voir `docs/BENCHMARK_ASR.md`) |
 
+| `ANTHROPIC_API_KEY` | *(absente)* | Clé API Claude (dans `.env` uniquement). Sans clé : mode « signaux seuls » |
+| `GSA_LLM_MODEL` | `claude-sonnet-5-5` | Modèle d'évaluation des extraits |
+| `GSA_LLM_EFFORT` | `medium` | `low`, `medium`, `high` |
+| `GSA_LLM_PRICE_*_PER_MTOK` | 2 / 10 / 0,10 / 2,50 | Tarifs ($/million de jetons) pour l'estimation et le suivi |
+| `GSA_DEFAULT_MONTHLY_CAP_USD` | `40` | Plafond initial (ensuite réglé dans Paramètres) |
+| `GSA_ANALYSIS_PROXY_HEIGHT` | `480` | Hauteur de la copie d'analyse |
+| `GSA_FRAMES_PER_CANDIDATE` | `8` | Images envoyées à l'IA par extrait (0 = aucune) |
+
 Les variables absentes de `.env` prennent la valeur par défaut ci-dessus.
+
+#### Clé API Anthropic
+
+1. Créer une clé sur https://console.anthropic.com (compte et moyen de paiement à votre nom).
+2. Ajouter dans `.env` (jamais ailleurs) : `ANTHROPIC_API_KEY=sk-ant-…`
+3. Redémarrer : `scripts\stop.ps1` puis `scripts\start.ps1`. Paramètres doit afficher
+   « Clé API : Configurée ». La valeur n'est jamais affichée ni journalisée.
 
 ## Lancement / arrêt
 
@@ -216,11 +272,20 @@ ffprobe sont réels (vidéos synthétiques générées pendant les tests).
 | « GPU indisponible … transcription sur CPU » | Pilote NVIDIA absent/obsolète ou VRAM saturée (jeu en cours) ; fermer les applications GPU ou forcer `GSA_WHISPER_DEVICE=cpu` |
 | « YouTube a refusé la requête (vérification anti-robot) » | Réessayer plus tard. L'application ne contourne pas cette protection |
 | Échec yt-dlp sur une vidéo publique | YouTube change souvent : mettre à jour yt-dlp (`pip install -U "yt-dlp[default]"`), puis relancer le job |
+| « IA indisponible (clé API absente) » | Ajouter `ANTHROPIC_API_KEY` dans `.env` puis redémarrer ; sinon l'analyse se fait par signaux |
+| « Plafond mensuel atteint » | Augmenter le plafond dans Paramètres ou attendre le mois suivant ; les extraits restants sont évalués par signaux |
+| « Clé API refusée par Anthropic » | Clé invalide ou révoquée : la remplacer dans `.env` puis redémarrer, et relancer le job |
 | Transcription lente | Un jeu ou une autre application utilise le GPU ; voir `docs/BENCHMARK_ASR.md` (`GSA_WHISPER_BEAM_SIZE=1`) |
 
 ## Limites connues
 
-- Pas encore d'analyse IA des moments, de détection/score de clips, de montage ni d'export.
+- Pas encore de montage vertical, de sous-titres, de narration, de rapport de risques ni d'export.
+- L'énergie sonore signale un son plus fort que d'habitude, pas sa nature : aucune
+  reconnaissance de rires, cris ou musique n'est faite à ce stade.
+- Le mode « signaux seuls » ne comprend pas le contenu : ses notes sont approximatives
+  (originalité fixée à 5) et clairement signalées comme telles.
+- Le coût affiché est calculé à partir des jetons facturés et des tarifs configurés : à
+  rapprocher de la facture Anthropic, qui fait foi.
 - Sources : YouTube uniquement (une vidéo par lien, pas de playlist).
 - Transcription mesurée sur une vraie vidéo de 10 min (33× temps réel, GPU libre) ; la précision
   sur des parties avec voix superposées, cris ou musique forte reste à évaluer.

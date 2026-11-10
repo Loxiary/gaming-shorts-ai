@@ -99,11 +99,14 @@ def job_to_detail(job: Job) -> JobDetailOut:
 # --------------------------------------------------------------------------- commandes
 
 
-def enqueue_job(session: Session, project_id: str, kind: str) -> Job:
+def enqueue_job(session: Session, project_id: str, kind: str, *, internal: bool = False) -> Job:
+    """``internal`` : appel par un service qui prépare lui-même les données du job."""
     get_project(session, project_id)
     definition = get_job_kind(kind)
     if definition is None:
         raise AppError(f"Type de job inconnu : {kind}")
+    if kind == "analyze_clips" and not internal:
+        raise AppError("Une analyse se lance depuis la fiche du projet (choix du profil).")
     if kind == "ingest_youtube":
         has_source = session.scalar(
             select(SourceMedia.id).where(SourceMedia.project_id == project_id)

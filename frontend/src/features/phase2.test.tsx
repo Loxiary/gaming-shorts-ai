@@ -66,6 +66,16 @@ const transcript: Transcript = {
   ],
 };
 
+const estimate = {
+  expected_candidates: 3,
+  estimated_cost_usd: 0.09,
+  key_configured: false,
+  api_enabled: true,
+  month_spent_usd: 0,
+  monthly_cap_usd: 40,
+  model: "claude-sonnet-5-5",
+};
+
 function detail(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
   const { segments: _segments, ...summary } = transcript;
   void _segments;
@@ -144,6 +154,8 @@ describe("Fiche projet avec source", () => {
       if (c.url === "/api/projects/p1") return { body: detail() };
       if (c.url === "/api/projects/p1/transcript") return { body: transcript };
       if (c.url === "/api/job-kinds") return { body: [] };
+      if (c.url === "/api/profiles" || c.url === "/api/projects/p1/analyses") return { body: [] };
+      if (c.url.startsWith("/api/projects/p1/analysis-estimate")) return { body: estimate };
       return { body: health };
     });
     const user = userEvent.setup();

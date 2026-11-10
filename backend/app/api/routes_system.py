@@ -39,12 +39,18 @@ FEATURES = [
         name="Transcription locale horodatée", available=True, note="faster-whisper, hors ligne"
     ),
     FeatureStatusOut(
-        name="Analyse IA du contenu (scènes, événements)",
-        available=False,
-        note="Pas encore implémenté",
+        name="Analyse des moments forts (scènes, audio, parole)",
+        available=True,
+        note="Signaux locaux, sans coût",
     ),
     FeatureStatusOut(
-        name="Détection et score des clips", available=False, note="Pas encore implémenté"
+        name="Détection, score et sélection des clips (61–180 s)",
+        available=True,
+        note="IA Claude (clé API requise) ou estimation par signaux",
+    ),
+    FeatureStatusOut(name="Profils de montage", available=True, note="Disponible"),
+    FeatureStatusOut(
+        name="Suivi des coûts API et plafond mensuel", available=True, note="Disponible"
     ),
     FeatureStatusOut(name="Montage et rendu vidéo", available=False, note="Pas encore implémenté"),
 ]

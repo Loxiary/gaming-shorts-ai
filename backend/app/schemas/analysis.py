@@ -1,0 +1,200 @@
+"""Schémas de la Phase 3 : profils, analyses, candidats, coûts, réglages API."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.models import CRITERIA, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
+
+
+def _strip(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+class ProfileIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    editorial_focus: str | None = Field(default=None, max_length=2000)
+    threshold: float = Field(default=60.0, ge=0, le=100)
+    weights: dict[str, float]
+    output_language: str = Field(default="fr", min_length=2, max_length=10)
+    min_duration: float = Field(default=MIN_CLIP_SECONDS, ge=MIN_CLIP_SECONDS, le=MAX_CLIP_SECONDS)
+    max_duration: float = Field(default=MAX_CLIP_SECONDS, ge=MIN_CLIP_SECONDS, le=MAX_CLIP_SECONDS)
+    max_candidates: int = Field(default=12, ge=1, le=50)
+    use_vision: bool = True
+    is_default: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Le nom du profil ne peut pas être vide")
+        return value
+
+    @field_validator("description", "editorial_focus")
+    @classmethod
+    def _text(cls, value: str | None) -> str | None:
+        return _strip(value)
+
+    @field_validator("weights")
+    @classmethod
+    def _weights(cls, value: dict[str, float]) -> dict[str, float]:
+        unknown = set(value) - set(CRITERIA)
+        if unknown:
+            raise ValueError(f"Critères inconnus : {', '.join(sorted(unknown))}")
+        full = {key: float(value.get(key, 1.0)) for key in CRITERIA}
+        if any(w < 0 or w > 5 for w in full.values()):
+            raise ValueError("Chaque pondération doit être comprise entre 0 et 5")
+        if sum(full.values()) <= 0:
+            raise ValueError("Au moins un critère doit avoir une pondération positive")
+        return full
+
+    @model_validator(mode="after")
+    def _durations(self) -> ProfileIn:
+        if self.min_duration > self.max_duration:
+            raise ValueError("La durée minimale dépasse la durée maximale")
+        return self
+
+
+class ProfileOut(BaseModel):
+    id: str
+    name: str
+    description: str | None
+    editorial_focus: str | None
+    threshold: float
+    weights: dict[str, float]
+    output_language: str
+    min_duration: float
+    max_duration: float
+    max_candidates: int
+    use_vision: bool
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CriterionOut(BaseModel):
+    key: str
+    label: str
+
+
+class ClipScoreOut(BaseModel):
+    criterion: str
+    label: str
+    score: float
+    justification: str | None
+
+
+class FrameOut(BaseModel):
+    t: float
+    url: str
+
+
+class CandidateOut(BaseModel):
+    id: str
+    position: int
+    start_seconds: float
+    end_seconds: float
+    duration_seconds: float
+    peak_seconds: float | None
+    signal_score: float
+    status: str
+    summary: str | None
+    reason: str | None
+    events: list[dict[str, object]]
+    warnings: list[str]
+    confidence: float | None
+    overall_score: float | None
+    selected: bool
+    rejection_reason: str | None
+    error_message: str | None
+    transcript_excerpt: str | None
+    scores: list[ClipScoreOut]
+    frames: list[FrameOut]
+    signals: dict[str, object]
+
+
+class AnalysisOut(BaseModel):
+    id: str
+    project_id: str
+    job_id: str | None
+    profile_id: str | None
+    profile_name: str
+    threshold: float
+    engine: str | None
+    llm_model: str | None
+    use_vision: bool
+    notes: list[str]
+    cost_usd: float
+    created_at: datetime
+    candidate_count: int
+    selected_count: int
+    candidates: list[CandidateOut] = []
+
+
+class AnalyzeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str | None = Field(default=None, max_length=32)
+    engine: str = Field(default="auto", pattern="^(auto|llm|signals)$")
+
+
+class ReselectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    threshold: float = Field(ge=0, le=100)
+
+
+class ApiSettingsOut(BaseModel):
+    provider: str
+    model: str
+    effort: str
+    key_configured: bool
+    api_enabled: bool
+    monthly_cap_usd: float
+    month_spent_usd: float
+    prices_per_mtok: dict[str, float]
+
+
+class ApiSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_enabled: bool | None = None
+    monthly_cap_usd: float | None = Field(default=None, ge=0, le=10_000)
+
+
+class ApiUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    created_at: datetime
+    provider: str
+    model: str
+    purpose: str
+    project_id: str | None
+    candidate_id: str | None
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
+    images: int
+    cost_usd: float
+    status: str
+    detail: str | None
+
+
+class CostSummaryOut(BaseModel):
+    month_spent_usd: float
+    monthly_cap_usd: float
+    total_spent_usd: float
+    calls_this_month: int
+    by_month: list[dict[str, object]]
+    recent: list[ApiUsageOut]

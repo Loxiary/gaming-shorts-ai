@@ -1,3 +1,15 @@
+from app.models.analysis import (
+    CRITERIA,
+    MAX_CLIP_SECONDS,
+    MIN_CLIP_SECONDS,
+    ApiUsage,
+    AppSetting,
+    ClipAnalysis,
+    ClipCandidate,
+    ClipScore,
+    EditingProfile,
+    SceneSegment,
+)
 from app.models.base import Base
 from app.models.entities import (
     ACTIVE_JOB_STATUSES,
@@ -15,6 +27,16 @@ from app.models.entities import (
 )
 
 __all__ = [
+    "CRITERIA",
+    "MAX_CLIP_SECONDS",
+    "MIN_CLIP_SECONDS",
+    "ApiUsage",
+    "AppSetting",
+    "ClipAnalysis",
+    "ClipCandidate",
+    "ClipScore",
+    "EditingProfile",
+    "SceneSegment",
     "ACTIVE_JOB_STATUSES",
     "TERMINAL_JOB_STATUSES",
     "Base",

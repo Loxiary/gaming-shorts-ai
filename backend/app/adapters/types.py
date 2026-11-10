@@ -68,6 +68,28 @@ class MediaTool(Protocol):
         check_cancel: CancelCheck,
     ) -> None: ...
 
+    def make_proxy(
+        self,
+        src: Path,
+        dst: Path,
+        height: int,
+        duration_seconds: float,
+        on_progress: ProgressCallback,
+        check_cancel: CancelCheck,
+        video_codec: str | None = None,
+    ) -> None: ...
+
+    def detect_scenes(
+        self,
+        video: Path,
+        duration_seconds: float,
+        threshold: float,
+        on_progress: ProgressCallback,
+        check_cancel: CancelCheck,
+    ) -> list[tuple[float, float]]: ...
+
+    def extract_frame(self, video: Path, t: float, dst: Path, width: int) -> None: ...
+
 
 # --------------------------------------------------------------------------- transcription
 

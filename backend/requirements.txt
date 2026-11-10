@@ -14,3 +14,6 @@ nvidia-cublas-cu12==12.9.2.10  # DLL CUDA pour le GPU, sans installer le CUDA To
 nvidia-cudnn-cu12==9.28.1.4    # DLL cuDNN 9 (licence NVIDIA)
 # Note : PyAV 19 est incompatible avec faster_whisper.decode_audio (paramètre metadata_errors) ;
 # l'application lit elle-même le WAV 16 kHz produit par FFmpeg et n'utilise pas ce décodeur.
+
+# --- Phase 3 : évaluation des clips par IA
+anthropic==2.8.0            # SDK officiel Claude (MIT) ; utilisé seulement si ANTHROPIC_API_KEY est défini

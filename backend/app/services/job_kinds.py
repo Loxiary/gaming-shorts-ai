@@ -40,7 +40,28 @@ INGEST_STEPS = (
     StepDefinition("transcribing", "Transcription (faster-whisper)"),
 )
 
+ANALYZE_STEPS = (
+    StepDefinition("preparing_proxy", "Préparation de l'analyse (copie légère)"),
+    StepDefinition("detecting_scenes", "Détection des changements de scène"),
+    StepDefinition("analyzing_audio", "Analyse des signaux audio et de parole"),
+    StepDefinition("generating_candidates", "Proposition d'extraits (61–180 s)"),
+    StepDefinition("sampling_frames", "Extraction d'images horodatées"),
+    StepDefinition("scoring_candidates", "Évaluation des extraits"),
+    StepDefinition("selecting_clips", "Sélection (seuil, doublons)"),
+)
+
 JOB_KINDS: dict[str, JobKind] = {
+    "analyze_clips": JobKind(
+        kind="analyze_clips",
+        label="Analyse et détection des clips",
+        description=(
+            "Détecte les moments forts (scènes, audio, parole), propose des extraits de "
+            "61 à 180 s, les fait évaluer (IA ou signaux seuls) et sélectionne ceux qui "
+            "dépassent le seuil du profil."
+        ),
+        is_demo=False,
+        steps=ANALYZE_STEPS,
+    ),
     "ingest_youtube": JobKind(
         kind="ingest_youtube",
         label="Import YouTube et transcription",

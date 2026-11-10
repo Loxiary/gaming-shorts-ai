@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { type RefObject, useMemo, useState } from "react";
 
 import { ErrorBox, Loading } from "../../components/Feedback";
 import { api } from "../../services/api";
@@ -10,11 +10,11 @@ interface Props {
   projectId: string;
   summary: TranscriptSummary;
   mediaAvailable: boolean;
+  videoRef: RefObject<HTMLVideoElement | null>;
 }
 
-export function TranscriptPanel({ projectId, summary, mediaAvailable }: Props) {
+export function TranscriptPanel({ projectId, summary, mediaAvailable, videoRef }: Props) {
   const transcript = useTranscript(projectId, true, summary.id);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [query, setQuery] = useState("");
   const [current, setCurrent] = useState(0);
 
