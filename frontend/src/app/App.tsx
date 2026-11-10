@@ -3,6 +3,7 @@ import { Link, Route, Routes } from "react-router";
 
 import { Layout } from "../components/Layout";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
+import { ImportPage } from "../features/import/ImportPage";
 import { ProjectDetailPage } from "../features/projects/ProjectDetailPage";
 import { ProjectsPage } from "../features/projects/ProjectsPage";
 import { QueuePage } from "../features/queue/QueuePage";
@@ -22,6 +23,7 @@ export function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="importer" element={<ImportPage />} />
         <Route path="projets" element={<ProjectsPage />} />
         <Route path="projets/:id" element={<ProjectDetailPage />} />
         <Route path="file" element={<QueuePage />} />

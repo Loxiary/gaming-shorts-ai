@@ -18,7 +18,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.time import utcnow
-from app.models import ACTIVE_JOB_STATUSES, Job, JobStatus, JobStep, StepStatus, WorkerHeartbeat
+from app.models import (
+    ACTIVE_JOB_STATUSES,
+    Job,
+    JobStatus,
+    JobStep,
+    SourceMedia,
+    StepStatus,
+    WorkerHeartbeat,
+)
 from app.schemas.api import JobDetailOut, JobOut, JobStepOut
 from app.services.job_kinds import get_job_kind
 from app.services.projects import get_project
@@ -42,7 +50,11 @@ def get_job(session: Session, job_id: str, *, with_steps: bool = False) -> Job:
 def list_jobs(
     session: Session, *, status: str | None = None, project_id: str | None = None, limit: int = 200
 ) -> list[Job]:
-    stmt = select(Job).options(selectinload(Job.project)).order_by(Job.created_at.desc())
+    stmt = (
+        select(Job)
+        .options(selectinload(Job.project), selectinload(Job.steps))
+        .order_by(Job.created_at.desc())
+    )
     if status:
         stmt = stmt.where(Job.status == status)
     if project_id:
@@ -52,6 +64,9 @@ def list_jobs(
 
 def job_to_out(job: Job) -> JobOut:
     kind = get_job_kind(job.kind)
+    current = None
+    if job.current_step and "steps" in job.__dict__:  # étapes déjà chargées : pas de requête
+        current = next((st for st in job.steps if st.name == job.current_step), None)
     return JobOut(
         id=job.id,
         project_id=job.project_id,
@@ -62,6 +77,8 @@ def job_to_out(job: Job) -> JobOut:
         status=job.status,
         progress=job.progress,
         current_step=job.current_step,
+        current_step_label=current.label if current else None,
+        current_step_detail=current.detail if current else None,
         error_message=job.error_message,
         cancel_requested=job.cancel_requested,
         attempts=job.attempts,
@@ -87,6 +104,12 @@ def enqueue_job(session: Session, project_id: str, kind: str) -> Job:
     definition = get_job_kind(kind)
     if definition is None:
         raise AppError(f"Type de job inconnu : {kind}")
+    if kind == "ingest_youtube":
+        has_source = session.scalar(
+            select(SourceMedia.id).where(SourceMedia.project_id == project_id)
+        )
+        if not has_source:
+            raise AppError("Ce projet n'a pas de source : utilisez la page « Importer ».")
 
     active = session.scalar(
         select(Job.id).where(

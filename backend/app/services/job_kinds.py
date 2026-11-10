@@ -1,7 +1,8 @@
 """Catalogue des types de jobs connus.
 
-Phase 1 : seuls des jobs de DÉMONSTRATION existent. Ils n'effectuent aucun téléchargement,
-aucune analyse et aucun rendu ; ils simulent des étapes pour valider la file persistante.
+- ``ingest_youtube`` : traitement réel (Phase 2), créé par l'import d'un lien.
+- ``demo`` / ``demo_failure`` : jobs de DÉMONSTRATION (simple attente, aucun traitement),
+  conservés pour tester la file d'attente.
 """
 
 from __future__ import annotations
@@ -31,7 +32,25 @@ _DEMO_STEPS = (
     StepDefinition("demo_finalize", "Finalisation (simulation)"),
 )
 
+INGEST_STEPS = (
+    StepDefinition("validating_source", "Validation de la source"),
+    StepDefinition("downloading", "Téléchargement"),
+    StepDefinition("probing_media", "Analyse technique (ffprobe)"),
+    StepDefinition("extracting_audio", "Extraction de l'audio"),
+    StepDefinition("transcribing", "Transcription (faster-whisper)"),
+)
+
 JOB_KINDS: dict[str, JobKind] = {
+    "ingest_youtube": JobKind(
+        kind="ingest_youtube",
+        label="Import YouTube et transcription",
+        description=(
+            "Vérifie la vidéo, la télécharge (yt-dlp), l'analyse (ffprobe), extrait l'audio "
+            "et produit la transcription source horodatée (faster-whisper, en local)."
+        ),
+        is_demo=False,
+        steps=INGEST_STEPS,
+    ),
     "demo": JobKind(
         kind="demo",
         label="Démonstration",

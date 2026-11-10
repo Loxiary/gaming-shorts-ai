@@ -6,7 +6,11 @@ from app.models.entities import (
     JobStatus,
     JobStep,
     Project,
+    RightsStatus,
+    SourceMedia,
     StepStatus,
+    Transcript,
+    TranscriptSegment,
     WorkerHeartbeat,
 )
 
@@ -18,6 +22,10 @@ __all__ = [
     "JobStatus",
     "JobStep",
     "Project",
+    "RightsStatus",
+    "SourceMedia",
     "StepStatus",
+    "Transcript",
+    "TranscriptSegment",
     "WorkerHeartbeat",
 ]

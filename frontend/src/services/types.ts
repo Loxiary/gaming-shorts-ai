@@ -33,6 +33,8 @@ export interface Job {
   status: JobStatus;
   progress: number;
   current_step: string | null;
+  current_step_label: string | null;
+  current_step_detail: string | null;
   error_message: string | null;
   cancel_requested: boolean;
   attempts: number;
@@ -47,6 +49,9 @@ export interface JobStep {
   name: string;
   label: string;
   status: StepStatus;
+  progress: number;
+  detail: string | null;
+  output: Record<string, unknown> | null;
   error_message: string | null;
   started_at: string | null;
   finished_at: string | null;
@@ -56,8 +61,89 @@ export interface JobDetail extends Job {
   steps: JobStep[];
 }
 
+export type RightsStatus = "unknown" | "owned" | "authorized" | "licensed";
+
+export interface Source {
+  id: string;
+  source_type: string;
+  url: string;
+  external_id: string;
+  rights_status: RightsStatus;
+  rights_note: string | null;
+  title: string | null;
+  uploader: string | null;
+  channel_url: string | null;
+  upload_date: string | null;
+  platform_license: string | null;
+  duration_seconds: number | null;
+  media_available: boolean;
+  media_size_bytes: number | null;
+  audio_available: boolean;
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+  video_codec: string | null;
+  audio_codec: string | null;
+  has_audio: boolean | null;
+  created_at: string;
+}
+
+export interface TranscriptSummary {
+  id: string;
+  kind: string;
+  engine: string;
+  model: string;
+  device: string;
+  compute_type: string;
+  language: string | null;
+  language_probability: number | null;
+  audio_duration_seconds: number | null;
+  processing_seconds: number | null;
+  segment_count: number;
+  created_at: string;
+}
+
+export interface Word {
+  start: number;
+  end: number;
+  word: string;
+  probability: number | null;
+}
+
+export interface TranscriptSegment {
+  position: number;
+  start_seconds: number;
+  end_seconds: number;
+  text: string;
+  avg_logprob: number | null;
+  no_speech_prob: number | null;
+  words: Word[];
+}
+
+export interface Transcript extends TranscriptSummary {
+  segments: TranscriptSegment[];
+}
+
 export interface ProjectDetail extends Project {
   jobs: Job[];
+  source: Source | null;
+  transcript: TranscriptSummary | null;
+  files_size_bytes: number;
+}
+
+export interface ImportRequest {
+  urls: string[];
+  rights_status: RightsStatus;
+  rights_note?: string | null;
+  game?: string | null;
+}
+
+export interface ImportResult {
+  url: string;
+  status: "created" | "duplicate" | "rejected";
+  project_id: string | null;
+  job_id: string | null;
+  message: string | null;
 }
 
 export interface ProjectCreate {
@@ -103,4 +189,23 @@ export interface SystemInfo {
   features: { name: string; available: boolean; note: string }[];
   demo_step_seconds: number;
   worker_stale_seconds: number;
+  gpu: {
+    name: string;
+    memory_total_mib: number;
+    memory_used_mib: number;
+    memory_free_mib: number;
+    driver_version: string;
+  } | null;
+  asr: {
+    engine: string;
+    model: string;
+    model_dir: string;
+    model_present: boolean;
+    device: string;
+    compute_type: string;
+    language: string;
+    vad: boolean;
+  } | null;
+  max_download_height: number;
+  max_source_minutes: number;
 }

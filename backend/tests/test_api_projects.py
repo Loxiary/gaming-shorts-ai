@@ -95,6 +95,7 @@ def test_system_info(client: TestClient, migrated: Settings) -> None:
         "projects",
         "exports",
         "logs",
+        "models",
     }
     assert any(not f["available"] for f in body["features"])
     assert {t["name"] for t in body["tools"]} == {"ffmpeg", "ffprobe"}

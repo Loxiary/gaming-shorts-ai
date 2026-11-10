@@ -7,13 +7,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from app.adapters.gpu import query_gpu
 from app.api.deps import get_session, get_settings_dep
 from app.core.config import APP_NAME, APP_PHASE, APP_VERSION, DATA_SUBDIRS, Settings
 from app.core.errors import AppError
 from app.db.session import ensure_database_ready
 from app.schemas.api import (
+    AsrConfigOut,
     DataDirOut,
     FeatureStatusOut,
+    GpuOut,
     HealthOut,
     SystemInfoOut,
     ToolStatusOut,
@@ -26,12 +29,19 @@ router = APIRouter(prefix="/api", tags=["system"])
 # Ce que l'application sait réellement faire à ce stade (affiché tel quel dans l'UI).
 FEATURES = [
     FeatureStatusOut(name="Bibliothèque de projets", available=True, note="Disponible"),
+    FeatureStatusOut(name="File d'attente persistante", available=True, note="Disponible"),
     FeatureStatusOut(
-        name="File d'attente persistante", available=True, note="Jobs de démonstration uniquement"
+        name="Import de liens YouTube",
+        available=True,
+        note="Vidéos publiques ou non répertoriées, sans contournement d'accès",
     ),
-    FeatureStatusOut(name="Import de liens YouTube", available=False, note="Pas encore implémenté"),
     FeatureStatusOut(
-        name="Transcription / analyse IA", available=False, note="Pas encore implémenté"
+        name="Transcription locale horodatée", available=True, note="faster-whisper, hors ligne"
+    ),
+    FeatureStatusOut(
+        name="Analyse IA du contenu (scènes, événements)",
+        available=False,
+        note="Pas encore implémenté",
     ),
     FeatureStatusOut(
         name="Détection et score des clips", available=False, note="Pas encore implémenté"
@@ -119,4 +129,17 @@ def system_info(settings: Annotated[Settings, Depends(get_settings_dep)]) -> Sys
         features=FEATURES,
         demo_step_seconds=settings.demo_step_seconds,
         worker_stale_seconds=settings.worker_stale_seconds,
+        gpu=GpuOut(**gpu) if (gpu := query_gpu()) else None,  # type: ignore[arg-type]
+        asr=AsrConfigOut(
+            engine="faster-whisper",
+            model=settings.whisper_model,
+            model_dir=str(settings.whisper_model_dir),
+            model_present=(settings.whisper_model_dir / "model.bin").is_file(),
+            device=settings.whisper_device,
+            compute_type=settings.whisper_compute_type,
+            language=settings.whisper_language or "auto",
+            vad=settings.whisper_vad,
+        ),
+        max_download_height=settings.max_download_height,
+        max_source_minutes=settings.max_source_minutes,
     )

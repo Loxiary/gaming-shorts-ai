@@ -13,13 +13,13 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.1.0"
-APP_PHASE = "Phase 1 — fondations"
+APP_VERSION = "0.2.0"
+APP_PHASE = "Phase 2 — import et transcription"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 
-DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs")
+DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs", "models")
 DB_FILENAME = "gaming_shorts.db"
 
 
@@ -40,6 +40,20 @@ class Settings(BaseSettings):
     worker_stale_seconds: float = Field(default=30.0, ge=5, le=3600)
     demo_step_seconds: float = Field(default=2.0, ge=0, le=60)
 
+    # --- Import / téléchargement (Phase 2)
+    max_download_height: int = Field(default=1080, ge=360, le=2160)
+    max_source_minutes: int = Field(default=240, ge=1, le=1440)
+    min_free_disk_gb: float = Field(default=5.0, ge=0, le=1000)
+    ytdlp_js_runtime: str = "node"
+
+    # --- Transcription locale faster-whisper (Phase 2)
+    whisper_model: str = "large-v3-turbo"
+    whisper_device: str = "auto"  # auto | cuda | cpu
+    whisper_compute_type: str = "auto"  # auto | int8_float16 | float16 | int8 | float32
+    whisper_language: str = ""  # vide = détection automatique
+    whisper_vad: bool = True
+    whisper_beam_size: int = Field(default=5, ge=1, le=10)
+
     @field_validator("data_dir")
     @classmethod
     def _absolute_data_dir(cls, value: Path) -> Path:
@@ -57,6 +71,22 @@ class Settings(BaseSettings):
                 "GSA_API_HOST doit être une adresse de boucle locale (127.0.0.1) : "
                 "l'exposition réseau n'est pas prise en charge."
             )
+        return value
+
+    @field_validator("whisper_device")
+    @classmethod
+    def _valid_device(cls, value: str) -> str:
+        value = value.lower()
+        if value not in {"auto", "cuda", "cpu"}:
+            raise ValueError("GSA_WHISPER_DEVICE doit valoir auto, cuda ou cpu")
+        return value
+
+    @field_validator("whisper_language")
+    @classmethod
+    def _valid_language(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value and not (value.isalpha() and 2 <= len(value) <= 3):
+            raise ValueError("GSA_WHISPER_LANGUAGE doit être un code langue (ex. fr, en) ou vide")
         return value
 
     @field_validator("log_level")
@@ -83,6 +113,22 @@ class Settings(BaseSettings):
         if name not in DATA_SUBDIRS:
             raise ValueError(f"Sous-dossier de données inconnu : {name}")
         return self.data_dir / name
+
+    @property
+    def whisper_model_dir(self) -> Path:
+        return self.subdir("models") / f"faster-whisper-{self.whisper_model}"
+
+    def to_relative(self, path: Path) -> str:
+        """Chemin stocké en base : relatif à la racine data, séparateurs « / »."""
+        return path.resolve().relative_to(self.data_dir.resolve()).as_posix()
+
+    def resolve_data_path(self, relative: str) -> Path:
+        """Résout un chemin relatif stocké en base en refusant toute sortie de la racine data."""
+        root = self.data_dir.resolve()
+        candidate = (root / relative).resolve()
+        if not candidate.is_relative_to(root):
+            raise ValueError(f"Chemin hors du dossier de données refusé : {relative}")
+        return candidate
 
     def ensure_data_dirs(self) -> None:
         """Crée le dossier data et ses sous-dossiers (vides) s'ils n'existent pas."""

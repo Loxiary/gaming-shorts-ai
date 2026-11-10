@@ -18,17 +18,17 @@ export function ProjectsPage() {
         <h1>Bibliothèque de projets</h1>
         {!showForm && (
           <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>
-            Nouveau projet
+            Nouveau projet de test
           </button>
         )}
       </div>
 
       {showForm && (
         <div className="card">
-          <h2>Nouveau projet</h2>
+          <h2>Nouveau projet de test</h2>
           <p className="muted">
-            Un projet regroupe une source et ses traitements. En Phase 1, il ne contient pas encore
-            de vidéo : seuls des jobs de démonstration peuvent y être lancés.
+            Projet vide, sans vidéo, pour tester la file avec des jobs de démonstration. Pour
+            traiter une vraie vidéo, utilisez la page <Link to="/importer">Importer</Link>.
           </p>
           <ProjectForm
             submitLabel="Créer le projet"
@@ -52,7 +52,8 @@ export function ProjectsPage() {
       {projects.isError && <ErrorBox error={projects.error} onRetry={() => projects.refetch()} />}
       {projects.data && projects.data.length === 0 && (
         <EmptyState>
-          Aucun projet pour le moment. Créez un projet de test pour commencer.
+          Aucun projet pour le moment. <Link to="/importer">Importez une vidéo</Link> ou créez un
+          projet de test vide.
         </EmptyState>
       )}
       {projects.data && projects.data.length > 0 && (

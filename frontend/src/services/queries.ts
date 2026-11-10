@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./api";
-import type { JobStatus, ProjectCreate, ProjectUpdate } from "./types";
+import type { ImportRequest, JobStatus, ProjectCreate, ProjectUpdate, RightsStatus } from "./types";
 
 // Rafraîchissement périodique : suivi de la progression des jobs sans WebSocket (Phase 1).
 export const POLL_MS = 2000;
@@ -14,6 +14,7 @@ export const keys = {
   jobs: (filter: { status?: JobStatus; projectId?: string }) => ["jobs", filter] as const,
   job: (id: string) => ["job", id] as const,
   jobKinds: ["job-kinds"] as const,
+  transcript: (projectId: string) => ["transcript", projectId] as const,
 };
 
 export const useHealth = () =>
@@ -86,6 +87,31 @@ export function useDeleteProject() {
         qc.invalidateQueries({ queryKey: ["jobs"] }),
       ]);
     },
+  });
+}
+
+export const useTranscript = (projectId: string, enabled: boolean, version?: string) =>
+  useQuery({
+    queryKey: [...keys.transcript(projectId), version ?? ""],
+    queryFn: () => api.getTranscript(projectId),
+    enabled,
+    staleTime: Infinity,
+  });
+
+export function useImportSources() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (data: ImportRequest) => api.importSources(data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateSource(projectId: string) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (data: { rights_status?: RightsStatus; rights_note?: string | null }) =>
+      api.updateSource(projectId, data),
+    onSuccess: invalidate,
   });
 }
 
