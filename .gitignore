@@ -1,0 +1,60 @@
+# --- Données locales (jamais versionnées) ---
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# --- Médias volumineux ---
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.opus
+
+# --- Modèles IA ---
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.onnx
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+
+# --- Exécution ---
+.run/
+*.log
+
+# --- OS / éditeurs ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

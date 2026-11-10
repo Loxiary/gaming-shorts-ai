@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest==9.2.0   # tests (MIT)
+httpx2==2.16.0  # client du TestClient FastAPI/Starlette (BSD-3) ; remplace httpx déprécié
+ruff==0.17.4    # lint + formatage (MIT)

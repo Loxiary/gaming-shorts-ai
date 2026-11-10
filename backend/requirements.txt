@@ -1,0 +1,8 @@
+# Dépendances d'exécution du backend (versions validées sous Windows 11 / Python 3.13).
+# Lock complet (dépendances transitives) : requirements.lock.txt
+fastapi==0.162.4            # API HTTP locale (MIT)
+uvicorn[standard]==0.54.0   # serveur ASGI (BSD-3)
+sqlalchemy==2.1.8           # ORM / accès SQLite (MIT)
+alembic==1.20.1             # migrations de schéma (MIT)
+pydantic==2.14.3            # validation des schémas (MIT)
+pydantic-settings==2.16.2   # configuration via variables d'environnement / .env (MIT)

@@ -1,0 +1,106 @@
+Tu es le développeur senior responsable de la réalisation de Gaming Shorts AI.
+
+Commence par lire intégralement les trois documents fournis :
+- CAHIER_DES_CHARGES.md
+- ARCHITECTURE_TECHNIQUE.md
+- CLAUDE_INSTRUCTIONS.md
+
+Contexte machine cible : Windows 11, Ryzen 5 3600, 16 Go DDR4, NVIDIA RTX 3060 Ti (VRAM annoncée comme 6 Go par l'utilisateur, à vérifier), SSD avec environ 500 Go libres. L'application doit fonctionner localement. Le frontend web local est privilégié. Les traitements lourds seront séquentiels par défaut.
+
+IMPORTANT : ne développe pas toute l'application maintenant. Nous allons avancer par phases validées. Ta mission actuelle est uniquement la PHASE 1 : fondations propres et exécutables.
+
+OBJECTIF DE LA PHASE 1
+
+Créer le squelette fonctionnel de l'application avec :
+1. un frontend React + TypeScript + Vite ;
+2. un backend Python + FastAPI ;
+3. une base SQLite avec migrations ;
+4. une configuration centralisée ;
+5. une bibliothèque de projets locale ;
+6. une file d'attente persistante minimale ;
+7. une interface utilisateur permettant de créer un projet de test, de voir les projets et les tâches ;
+8. un démarrage simple sous Windows 11 ;
+9. des tests backend et frontend essentiels.
+
+PÉRIMÈTRE PRÉCIS
+
+A. Avant de coder
+- Inspecte le dépôt existant.
+- Ne supprime ni ne remplace aucun fichier utilisateur sans confirmation.
+- Vérifie les versions installées de Python, Node.js et npm.
+- Vérifie si FFmpeg/ffprobe sont présents, sans encore les intégrer au pipeline.
+- Exécute `nvidia-smi` si disponible et rapporte la VRAM exacte ; ne télécharge aucun modèle.
+- Présente un plan de fichiers et les choix techniques avant les changements importants.
+- Si le dépôt est vide, initialise une structure claire.
+
+B. Backend
+- Crée une API FastAPI locale, liée à 127.0.0.1.
+- Crée une configuration via variables d'environnement et un `.env.example`.
+- Crée SQLite et les migrations.
+- Crée les entités minimales Project, Job et JobStep (ou un modèle équivalent bien justifié).
+- Implémente les opérations CRUD nécessaires pour les projets.
+- Implémente une file persistante simple avec statuts queued/running/completed/failed/cancelled.
+- N'implémente pas encore de worker vidéo réel.
+- Ajoute un job de démonstration/test clairement identifié comme tel.
+- Ajoute un endpoint healthcheck.
+- Ajoute validation, erreurs explicites et logs.
+- Ajoute tests unitaires et API.
+
+C. Frontend
+- Crée une interface propre, moderne et responsive.
+- Langue par défaut : français.
+- Pages ou sections : tableau de bord, projets/bibliothèque, file d'attente, paramètres de base.
+- Permets de créer un projet de test et de consulter ses détails.
+- Affiche les tâches et leur statut.
+- Affiche clairement que les traitements IA/vidéo ne sont pas encore implémentés.
+- Aucun bouton inactif ou faisant croire qu'une fonctionnalité existe.
+- Gère les erreurs de connexion backend et les états de chargement.
+
+D. Stockage
+- Toutes les données locales doivent être dans un dossier data configurable.
+- Ajouter les dossiers sources, temp, projects, exports et logs, mais ne pas créer de gros fichiers.
+- Ajouter les chemins de données au .gitignore.
+- Prévoir des chemins portables Windows.
+
+E. Qualité
+- Ajouter README avec prérequis, installation, lancement, tests et dépannage.
+- Ajouter scripts PowerShell de démarrage et d'arrêt si pertinent.
+- Ajouter tests.
+- Ajouter formatage/linting raisonnables.
+- Ne pas introduire Docker, Redis, Celery ou une architecture distribuée sans justification concrète.
+- Ne pas intégrer d'API payante ou de clé API à cette phase.
+- Ne pas télécharger de modèles IA.
+- Ne pas implémenter yt-dlp pour le moment.
+- Ne pas implémenter le montage FFmpeg pour le moment.
+
+CRITÈRES DE VALIDATION
+
+La phase 1 est terminée uniquement si :
+1. Le backend démarre localement.
+2. Le frontend démarre localement.
+3. Le frontend communique réellement avec le backend.
+4. Un projet de test peut être créé et retrouvé après redémarrage.
+5. Les tâches de démonstration sont persistées et consultables.
+6. Les migrations SQLite fonctionnent.
+7. Les tests backend et frontend sont exécutés et leurs résultats sont rapportés.
+8. Les instructions Windows sont documentées.
+9. Aucun secret ni donnée volumineuse n'est versionné.
+10. L'application ne prétend pas déjà télécharger, analyser ou générer des shorts.
+
+LIVRABLES DE TA RÉPONSE
+
+Avant de coder, donne-moi :
+- ton audit du dépôt et de l'environnement ;
+- les versions détectées ;
+- la VRAM détectée si possible ;
+- le plan d'implémentation ;
+- les éventuels risques ou choix à arbitrer.
+
+Ensuite, réalise la phase 1 par étapes. À la fin, fournis :
+- la liste des fichiers créés/modifiés ;
+- les commandes exactes pour installer, lancer et tester sous Windows 11 ;
+- les résultats réels des tests ;
+- les limites restantes ;
+- une proposition de phase 2.
+
+Ne passe pas à la phase 2 sans validation explicite de ma part.
