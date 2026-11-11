@@ -67,6 +67,7 @@ class JobCounts(BaseModel):
     total: int = 0
     queued: int = 0
     running: int = 0
+    paused: int = 0
     completed: int = 0
     failed: int = 0
     cancelled: int = 0
@@ -121,6 +122,7 @@ class JobOut(BaseModel):
     current_step_detail: str | None = None
     error_message: str | None
     cancel_requested: bool
+    pause_requested: bool = False
     attempts: int
     created_at: datetime
     started_at: datetime | None

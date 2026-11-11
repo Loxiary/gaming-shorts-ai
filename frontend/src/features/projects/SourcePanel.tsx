@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { errorMessage } from "../../services/api";
 import { formatBytes, formatTimecode, RIGHTS_LABELS } from "../../services/format";
-import { useUpdateSource } from "../../services/queries";
+import { useCreateJob, useUpdateSource } from "../../services/queries";
 import type { RightsStatus, Source } from "../../services/types";
 
 function formatUploadDate(value: string | null): string {
@@ -61,7 +61,7 @@ export function SourcePanel({ projectId, source }: { projectId: string; source: 
                 {source.media_size_bytes ? formatBytes(source.media_size_bytes) : "—"}
               </>
             ) : (
-              <span className="muted">pas encore téléchargé</span>
+              <RedownloadSource projectId={projectId} />
             )}
           </dd>
         </div>
@@ -101,5 +101,24 @@ export function SourcePanel({ projectId, source }: { projectId: string; source: 
         {update.isError && <p className="job-error">{errorMessage(update.error)}</p>}
       </div>
     </div>
+  );
+}
+
+function RedownloadSource({ projectId }: { projectId: string }) {
+  const createJob = useCreateJob();
+  return (
+    <>
+      <span className="muted">non disponible (pas encore téléchargée ou supprimée)</span>{" "}
+      <button
+        type="button"
+        className="btn btn-small"
+        disabled={createJob.isPending || createJob.isSuccess}
+        onClick={() => createJob.mutate({ projectId, kind: "ingest_youtube" })}
+        title="Relance l'import : téléchargement et transcription"
+      >
+        {createJob.isSuccess ? "Import ajouté à la file" : "Retélécharger la vidéo"}
+      </button>
+      {createJob.isError && <span className="job-error"> {errorMessage(createJob.error)}</span>}
+    </>
   );
 }

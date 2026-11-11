@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.time import utcnow
-from app.models import ClipCandidate, ClipRender, Job, JobStatus
+from app.models import (
+    ACTIVE_JOB_STATUSES,
+    ClipAnalysis,
+    ClipCandidate,
+    ClipRender,
+    Job,
+    JobStatus,
+)
 from app.render.risk import export_warnings
 from app.schemas.render import RenderOut
 from app.services import profiles as profile_svc
@@ -43,7 +50,7 @@ def create_render(session: Session, candidate_id: str, profile_id: str | None) -
         .join(Job, Job.id == ClipRender.job_id)
         .where(
             ClipRender.candidate_id == candidate_id,
-            Job.status.in_((JobStatus.QUEUED, JobStatus.RUNNING)),
+            Job.status.in_(ACTIVE_JOB_STATUSES),
         )
     )
     if active:
@@ -71,6 +78,42 @@ def create_render(session: Session, candidate_id: str, profile_id: str | None) -
     session.commit()
     logger.info("Montage demandé", extra={"project_id": analysis.project_id, "job_id": job.id})
     return render
+
+
+def create_renders_for_selection(
+    session: Session, analysis_id: str, profile_id: str | None
+) -> tuple[list[ClipRender], list[str]]:
+    """Montage en lot des extraits SÉLECTIONNÉS d'une analyse. Un extrait déjà monté (ou en
+    cours de montage) est ignoré, pour ne pas dépenser deux fois. Retourne (créés, ignorés)."""
+    analysis = session.get(ClipAnalysis, analysis_id)
+    if analysis is None:
+        raise NotFoundError("Analyse introuvable.")
+    candidates = list(
+        session.scalars(
+            select(ClipCandidate)
+            .where(ClipCandidate.analysis_id == analysis_id, ClipCandidate.selected.is_(True))
+            .order_by(ClipCandidate.start_seconds)
+        )
+    )
+    if not candidates:
+        raise AppError("Aucun extrait sélectionné dans cette analyse : rien à monter.")
+    created: list[ClipRender] = []
+    skipped: list[str] = []
+    for c in candidates:
+        existing = session.scalar(
+            select(ClipRender.id)
+            .outerjoin(Job, Job.id == ClipRender.job_id)
+            .where(
+                ClipRender.candidate_id == c.id,
+                (Job.status.is_(None))
+                | Job.status.in_((*ACTIVE_JOB_STATUSES, JobStatus.COMPLETED)),
+            )
+        )
+        if existing:
+            skipped.append(c.id)
+            continue
+        created.append(create_render(session, c.id, profile_id))
+    return created, skipped
 
 
 def get_render(session: Session, render_id: str) -> ClipRender:
@@ -141,6 +184,7 @@ def render_to_out(session: Session, settings: Settings, r: ClipRender) -> Render
             else None
         ),
         export_warnings=export_warnings(risk, qc) if risk else [],
+        files_purged=r.files_purged,
         ready=ready,
         cost_usd=round(r.cost_usd, 4),
         export_status=r.export_status,
@@ -238,7 +282,7 @@ def delete_render(session: Session, settings: Settings, render_id: str) -> None:
     """Supprime le rendu et ses fichiers de travail. Un fichier exporté est CONSERVÉ."""
     r = get_render(session, render_id)
     job = session.get(Job, r.job_id) if r.job_id else None
-    if job and job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+    if job and job.status in ACTIVE_JOB_STATUSES:
         raise ConflictError("Montage en cours : annulez-le d'abord.")
     workdir = settings.subdir("projects") / r.project_id / "renders" / r.id
     root = settings.data_dir.resolve()

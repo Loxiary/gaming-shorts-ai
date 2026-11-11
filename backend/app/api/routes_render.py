@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_session, get_settings_dep
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.schemas.render import ExportConfirm, RenderCreate, RenderOut
+from app.schemas.render import BatchRenderOut, ExportConfirm, RenderCreate, RenderOut
 from app.services import renders as svc
 from app.services.projects import get_project
 
@@ -28,6 +28,22 @@ def create_render(
 ) -> RenderOut:
     render = svc.create_render(session, candidate_id, data.profile_id)
     return svc.render_to_out(session, settings, render)
+
+
+@router.post(
+    "/analyses/{analysis_id}/renders",
+    response_model=BatchRenderOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_selection_renders(
+    analysis_id: str, data: RenderCreate, session: SessionDep, settings: SettingsDep
+) -> BatchRenderOut:
+    """Monte tous les extraits sélectionnés (ceux déjà montés ou en cours sont ignorés)."""
+    created, skipped = svc.create_renders_for_selection(session, analysis_id, data.profile_id)
+    return BatchRenderOut(
+        created=[svc.render_to_out(session, settings, r) for r in created],
+        skipped_candidate_ids=skipped,
+    )
 
 
 @router.get("/projects/{project_id}/renders", response_model=list[RenderOut])

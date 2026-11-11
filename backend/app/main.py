@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import (
+    routes_admin,
     routes_analysis,
     routes_jobs,
     routes_music,
@@ -84,4 +85,5 @@ def create_app(settings: Settings | None = None, *, configure_logs: bool = True)
     app.include_router(routes_analysis.router)
     app.include_router(routes_render.router)
     app.include_router(routes_music.router)
+    app.include_router(routes_admin.router)
     return app

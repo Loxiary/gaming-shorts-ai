@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { errorMessage } from "../services/api";
 import { DemoBadge, JobStatusBadge, ProgressBar, StepStatusBadge } from "./StatusBadge";
 import { formatBytes, formatDate, formatDuration } from "../services/format";
-import { useCancelJob, useJob, useRetryJob } from "../services/queries";
+import { useCancelJob, useJob, usePauseJob, useResumeJob, useRetryJob } from "../services/queries";
 import type { Job } from "../services/types";
 
 interface Props {
@@ -17,10 +17,18 @@ export function JobCard({ job, showProject = true }: Props) {
   const detail = useJob(job.id, expanded);
   const cancel = useCancelJob();
   const retry = useRetryJob();
+  const pause = usePauseJob();
+  const resume = useResumeJob();
 
-  const canCancel = (job.status === "queued" || job.status === "running") && !job.cancel_requested;
+  const active = job.status === "queued" || job.status === "running" || job.status === "paused";
+  const canCancel = active && !job.cancel_requested;
   const canRetry = job.status === "failed" || job.status === "cancelled";
-  const actionError = cancel.error ?? retry.error;
+  const canPause =
+    (job.status === "queued" || job.status === "running") &&
+    !job.pause_requested &&
+    !job.cancel_requested;
+  const canResume = job.status === "paused" || Boolean(job.pause_requested);
+  const actionError = cancel.error ?? retry.error ?? pause.error ?? resume.error;
 
   return (
     <article className="job-card" aria-label={`Job ${job.kind_label}`}>
@@ -31,6 +39,27 @@ export function JobCard({ job, showProject = true }: Props) {
           {job.is_demo && <DemoBadge />}
         </div>
         <div className="job-actions">
+          {canPause && (
+            <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => pause.mutate(job.id)}
+              disabled={pause.isPending}
+              title="Pause entre deux étapes : l'étape en cours se termine d'abord"
+            >
+              Pause
+            </button>
+          )}
+          {canResume && (
+            <button
+              type="button"
+              className="btn btn-small btn-primary"
+              onClick={() => resume.mutate(job.id)}
+              disabled={resume.isPending}
+            >
+              Reprendre
+            </button>
+          )}
           {canCancel && (
             <button
               type="button"
@@ -93,6 +122,17 @@ export function JobCard({ job, showProject = true }: Props) {
         </div>
       </dl>
 
+      {job.pause_requested && job.status === "running" && (
+        <p className="note">
+          Pause demandée : elle prendra effet à la fin de l'étape en cours. Les étapes terminées
+          sont conservées.
+        </p>
+      )}
+      {job.status === "paused" && (
+        <p className="note">
+          En pause : « Reprendre » remet le job dans la file, à l'étape où il s'est arrêté.
+        </p>
+      )}
       {job.cancel_requested && job.status === "running" && (
         <p className="note">
           Annulation demandée : elle prendra effet au prochain point d'arrêt sûr de l'étape en

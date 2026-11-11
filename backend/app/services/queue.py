@@ -81,6 +81,7 @@ def job_to_out(job: Job) -> JobOut:
         current_step_detail=current.detail if current else None,
         error_message=job.error_message,
         cancel_requested=job.cancel_requested,
+        pause_requested=job.pause_requested,
         attempts=job.attempts,
         created_at=job.created_at,
         started_at=job.started_at,
@@ -150,8 +151,14 @@ def request_cancel(session: Session, job_id: str) -> Job:
     # Job en attente : annulation immédiate (conditionnelle pour éviter une course avec le worker).
     result = session.execute(
         update(Job)
-        .where(Job.id == job_id, Job.status == JobStatus.QUEUED)
-        .values(status=JobStatus.CANCELLED, finished_at=now, updated_at=now, current_step=None)
+        .where(Job.id == job_id, Job.status.in_((JobStatus.QUEUED, JobStatus.PAUSED)))
+        .values(
+            status=JobStatus.CANCELLED,
+            finished_at=now,
+            updated_at=now,
+            current_step=None,
+            pause_requested=False,
+        )
     )
     if result.rowcount:
         session.execute(
@@ -160,7 +167,7 @@ def request_cancel(session: Session, job_id: str) -> Job:
             .values(status=StepStatus.CANCELLED)
         )
         session.commit()
-        logger.info("Job annulé (en attente)", extra={"job_id": job_id})
+        logger.info("Job annulé (en attente ou en pause)", extra={"job_id": job_id})
         return get_job(session, job_id, with_steps=True)
 
     # Job en cours : annulation sûre à la fin de l'étape courante, par le worker.
@@ -173,6 +180,53 @@ def request_cancel(session: Session, job_id: str) -> Job:
     if not result.rowcount:
         raise ConflictError("Ce job est déjà terminé : il ne peut pas être annulé.")
     logger.info("Annulation demandée (job en cours)", extra={"job_id": job_id})
+    session.expire_all()
+    return get_job(session, job_id, with_steps=True)
+
+
+def request_pause(session: Session, job_id: str) -> Job:
+    """Pause sûre : immédiate pour un job en attente, à la fin de l'étape en cours sinon.
+    Les étapes terminées sont conservées ; la reprise continue à l'étape suivante."""
+    now = utcnow()
+    get_job(session, job_id)
+    result = session.execute(
+        update(Job)
+        .where(Job.id == job_id, Job.status == JobStatus.QUEUED)
+        .values(status=JobStatus.PAUSED, updated_at=now, current_step=None)
+    )
+    if not result.rowcount:
+        result = session.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+            .values(pause_requested=True, updated_at=now)
+        )
+    session.commit()
+    if not result.rowcount:
+        raise ConflictError("Seul un job en attente ou en cours peut être mis en pause.")
+    logger.info("Pause demandée", extra={"job_id": job_id})
+    session.expire_all()
+    return get_job(session, job_id, with_steps=True)
+
+
+def resume_job(session: Session, job_id: str) -> Job:
+    """Remet en file un job en pause (ou annule une demande de pause pas encore appliquée)."""
+    now = utcnow()
+    get_job(session, job_id)
+    result = session.execute(
+        update(Job)
+        .where(Job.id == job_id, Job.status == JobStatus.PAUSED)
+        .values(status=JobStatus.QUEUED, pause_requested=False, updated_at=now)
+    )
+    if not result.rowcount:
+        result = session.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.status == JobStatus.RUNNING, Job.pause_requested)
+            .values(pause_requested=False, updated_at=now)
+        )
+    session.commit()
+    if not result.rowcount:
+        raise ConflictError("Ce job n'est pas en pause.")
+    logger.info("Job repris", extra={"job_id": job_id})
     session.expire_all()
     return get_job(session, job_id, with_steps=True)
 

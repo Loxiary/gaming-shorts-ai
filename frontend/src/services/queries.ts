@@ -129,6 +129,16 @@ export function useCancelJob() {
   return useMutation({ mutationFn: (id: string) => api.cancelJob(id), onSuccess: invalidate });
 }
 
+export function usePauseJob() {
+  const invalidate = useInvalidateAll();
+  return useMutation({ mutationFn: (id: string) => api.pauseJob(id), onSuccess: invalidate });
+}
+
+export function useResumeJob() {
+  const invalidate = useInvalidateAll();
+  return useMutation({ mutationFn: (id: string) => api.resumeJob(id), onSuccess: invalidate });
+}
+
 export function useRetryJob() {
   const invalidate = useInvalidateAll();
   return useMutation({ mutationFn: (id: string) => api.retryJob(id), onSuccess: invalidate });

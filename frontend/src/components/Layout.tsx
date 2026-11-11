@@ -65,9 +65,9 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 5.</strong> Import, transcription, détection, montage vertical, audio
-            (musique d'origine atténuée, narration, musique sous licence), facecam et export
-            confirmé disponibles. Rien n'est publié automatiquement : l'export reste votre décision.
+            <strong>Phase 6 — V1.</strong> Import, transcription, détection, montage vertical,
+            audio, facecam, file avec pause, stockage et sauvegardes. Rien n'est publié
+            automatiquement : l'export reste votre décision.
           </div>
           <div className="status-pills" aria-live="polite">
             <BackendStatus />

@@ -336,6 +336,9 @@ describe("Coûts et réglages API", () => {
       if (url === "/api/settings/api")
         return { body: method === "PATCH" ? apiSettings : apiSettings };
       if (url === "/api/system") return { body: system };
+      if (url === "/api/settings/runtime" || url === "/api/backups") return { body: [] };
+      if (url === "/api/storage")
+        return { status: 404, body: { error: { code: "not_found", message: "x" } } };
       return undefined;
     });
     const user = userEvent.setup();

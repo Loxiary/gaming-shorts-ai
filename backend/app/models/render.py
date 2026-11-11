@@ -49,6 +49,10 @@ class ClipRender(Base):
     credits_json: Mapped[str | None] = mapped_column(Text)
     preview_audio_path: Mapped[str | None] = mapped_column(String(500))
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # Phase 6 : fichiers supprimés par le nettoyage (la fiche et les rapports restent).
+    files_purged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Export : uniquement après confirmation explicite de l'utilisateur.
     export_status: Mapped[str] = mapped_column(String(20), nullable=False, default="not_exported")

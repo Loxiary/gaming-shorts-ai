@@ -1,12 +1,13 @@
 // Types alignés sur les schémas Pydantic du backend (backend/app/schemas/api.py).
 
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type JobStatus = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
 export type StepStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export interface JobCounts {
   total: number;
   queued: number;
   running: number;
+  paused?: number;
   completed: number;
   failed: number;
   cancelled: number;
@@ -37,6 +38,7 @@ export interface Job {
   current_step_detail: string | null;
   error_message: string | null;
   cancel_requested: boolean;
+  pause_requested?: boolean;
   attempts: number;
   created_at: string;
   started_at: string | null;

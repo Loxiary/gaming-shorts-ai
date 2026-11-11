@@ -40,7 +40,13 @@ export function RenderCard({ render: r }: { render: Render }) {
           <video className="vertical" src={r.video_url} controls preload="metadata" />
         ) : (
           <div className="vertical placeholder">
-            {running ? "Montage en cours…" : r.job_status === "failed" ? "Échec" : "—"}
+            {running
+              ? "Montage en cours…"
+              : r.files_purged
+                ? "Fichier supprimé par le nettoyage"
+                : r.job_status === "failed"
+                  ? "Échec"
+                  : "—"}
           </div>
         )}
       </div>

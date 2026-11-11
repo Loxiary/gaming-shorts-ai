@@ -1,4 +1,7 @@
 import { ApiSettingsCard } from "../analysis/ApiSettingsCard";
+import { BackupsCard } from "./BackupsCard";
+import { RuntimeSettingsCard } from "./RuntimeSettingsCard";
+import { StorageCard } from "./StorageCard";
 import { ErrorBox, Loading } from "../../components/Feedback";
 import { formatBytes } from "../../services/format";
 import { useSystem } from "../../services/queries";
@@ -14,10 +17,10 @@ export function SettingsPage() {
     <section>
       <h1>Paramètres</h1>
       <p className="muted">
-        L'autorisation des appels payants et le plafond mensuel se règlent ici. Le reste de la
-        configuration se modifie dans le fichier <code>.env</code> à la racine du projet, puis en
-        redémarrant l'application (<code>scripts\stop.ps1</code> puis <code>scripts\start.ps1</code>
-        ).
+        Appels payants, plafond mensuel, réglages courants, stockage et sauvegardes se gèrent ici.
+        Le reste (dossier de données, ports, clé API) se modifie dans le fichier <code>.env</code> à
+        la racine du projet, puis en redémarrant l'application (<code>scripts\stop.ps1</code> puis{" "}
+        <code>scripts\start.ps1</code>).
       </p>
 
       <div className="card">
@@ -56,6 +59,9 @@ export function SettingsPage() {
       </div>
 
       <ApiSettingsCard />
+      <RuntimeSettingsCard />
+      <StorageCard />
+      <BackupsCard />
 
       <div className="card">
         <h2>Transcription et GPU</h2>

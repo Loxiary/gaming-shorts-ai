@@ -43,6 +43,7 @@ class RenderOut(BaseModel):
     facecam: dict[str, Any] | None = None
     credits: list[dict[str, Any]] = []
     preview_audio_url: str | None = None
+    files_purged: bool = False
     export_warnings: list[str]
     ready: bool
     cost_usd: float
@@ -51,3 +52,8 @@ class RenderOut(BaseModel):
     export_confirmed_at: datetime | None
     acknowledged_warnings: list[str]
     created_at: datetime
+
+
+class BatchRenderOut(BaseModel):
+    created: list[RenderOut]
+    skipped_candidate_ids: list[str]

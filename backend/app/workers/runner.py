@@ -38,8 +38,12 @@ class Worker:
         adapters: Adapters | None = None,
     ) -> None:
         self.settings = settings
+        self.base_settings = settings  # .env ; les surcharges de l'interface s'y ajoutent
         self.session_factory = session_factory
         self._adapters = adapters
+        self._adapters_injected = adapters is not None
+        self._overrides_fp: str | None = None
+        self._last_auto_cleanup = None
         self.worker_id = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
         self.started_at = utcnow()
         self.stop_event = threading.Event()
@@ -92,9 +96,49 @@ class Worker:
 
     # ----------------------------------------------------------------- boucle
 
+    def refresh_settings(self) -> None:
+        """Applique les réglages modifiés dans l'interface (au début de chaque job)."""
+        from app.services.runtime_settings import effective_settings, overrides_fingerprint
+
+        with self.session_factory() as s:
+            fp = overrides_fingerprint(s)
+            if fp == self._overrides_fp:
+                return
+            self.settings = effective_settings(s, self.base_settings)
+        if self._overrides_fp is not None:
+            logger.info("Réglages modifiés appliqués", extra=self._log)
+            if not self._adapters_injected:
+                self._adapters = None  # reconstruits avec les nouveaux réglages
+        self._overrides_fp = fp
+
+    def maybe_auto_cleanup(self) -> None:
+        """Nettoyage quotidien des seuls fichiers intermédiaires, si activé dans Paramètres."""
+        if not self.settings.retention_auto:
+            return
+        now = utcnow()
+        if self._last_auto_cleanup and now - self._last_auto_cleanup < timedelta(days=1):
+            return
+        self._last_auto_cleanup = now
+        from app.services import storage
+
+        with self.session_factory() as s:
+            result = storage.cleanup(s, self.settings, ["temp"], dry_run=False)
+        if result["files"]:
+            logger.info(
+                "Nettoyage automatique : %d fichier(s), %d octets libérés",
+                result["files"],
+                result["bytes"],
+                extra=self._log,
+            )
+
     def run_once(self) -> bool:
         """Reprend les jobs abandonnés puis traite au plus un job (True si un job a tourné)."""
         self.beat()
+        self.refresh_settings()
+        try:
+            self.maybe_auto_cleanup()
+        except Exception:  # noqa: BLE001 - le nettoyage ne doit jamais bloquer la file
+            logger.exception("Échec du nettoyage automatique", extra=self._log)
         with self.session_factory() as s:
             recover_stale_jobs(s, self.stale_after)
             job_id = claim_next_job(s, self.worker_id)
@@ -156,6 +200,10 @@ class Worker:
             if self._cancel_requested(job_id):
                 self._cancel(job_id)
                 logger.info("Job annulé entre deux étapes", extra=log)
+                return
+            if self._pause_requested(job_id):
+                self._pause(job_id)
+                logger.info("Job mis en pause entre deux étapes", extra=log)
                 return
             self._start_step(job_id, step_id, step_name)
             ctx = StepContext(
@@ -226,6 +274,26 @@ class Worker:
     def _cancel_requested(self, job_id: str) -> bool:
         with self.session_factory() as s:
             return bool(s.scalar(select(Job.cancel_requested).where(Job.id == job_id)))
+
+    def _pause_requested(self, job_id: str) -> bool:
+        with self.session_factory() as s:
+            return bool(s.scalar(select(Job.pause_requested).where(Job.id == job_id)))
+
+    def _pause(self, job_id: str) -> None:
+        now = utcnow()
+        with self.session_factory() as s:
+            s.execute(
+                update(Job)
+                .where(Job.id == job_id, Job.locked_by == self.worker_id)
+                .values(
+                    status=JobStatus.PAUSED,
+                    pause_requested=False,
+                    current_step=None,
+                    locked_by=None,
+                    updated_at=now,
+                )
+            )
+            s.commit()
 
     def _start_step(self, job_id: str, step_id: str, step_name: str) -> None:
         now = utcnow()
@@ -315,6 +383,7 @@ class Worker:
                     current_step=None,
                     locked_by=None,
                     cancel_requested=False,
+                    pause_requested=False,
                 )
             )
             s.commit()

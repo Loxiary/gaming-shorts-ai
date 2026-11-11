@@ -10,6 +10,7 @@ import {
   useSaveProfile,
 } from "../../services/analysisApi";
 import type { Criterion, Profile, ProfileInput, SubtitleStyle } from "../../services/analysisTypes";
+import { adminApi, useImportProfiles } from "../../services/adminApi";
 import { errorMessage } from "../../services/api";
 import { AudioSettings } from "../audio/AudioSettings";
 import { DEFAULT_AUDIO } from "../audio/audioDefaults";
@@ -78,6 +79,8 @@ export function ProfilesPage() {
         Un profil fixe le seuil de sélection, l'importance de chaque critère dans la note globale,
         l'angle éditorial transmis à l'IA et la durée des extraits (toujours entre 61 et 180 s).
       </p>
+
+      <ProfilesTransfer />
 
       {editing && (
         <ProfileEditor
@@ -480,5 +483,49 @@ function MontageSettings({
         </select>
       </label>
     </fieldset>
+  );
+}
+
+/** Export (fichier JSON) et import des profils, pour les sauvegarder ou les partager. */
+function ProfilesTransfer() {
+  const importer = useImportProfiles();
+  const [readError, setReadError] = useState<string | null>(null);
+  return (
+    <div className="job-actions profiles-transfer">
+      <a className="btn btn-small" href={adminApi.profilesExportUrl} download>
+        Exporter les profils
+      </a>
+      <label className="btn btn-small">
+        Importer des profils…
+        <input
+          type="file"
+          accept="application/json,.json"
+          className="visually-hidden"
+          aria-label="Fichier de profils à importer"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            setReadError(null);
+            try {
+              importer.mutate(JSON.parse(await file.text()));
+            } catch {
+              setReadError("Fichier illisible : choisissez un export de profils (JSON).");
+            }
+          }}
+        />
+      </label>
+      {(readError || importer.isError) && (
+        <span className="job-error" role="alert">
+          {readError ?? errorMessage(importer.error)}
+        </span>
+      )}
+      {importer.data && (
+        <span className="note" role="status">
+          {importer.data.length} profil(s) importé(s) :{" "}
+          {importer.data.map((p) => p.name).join(", ")}.
+        </span>
+      )}
+    </div>
   );
 }

@@ -15,7 +15,7 @@ import {
 import type { Analysis, AnalysisEngine } from "../../services/analysisTypes";
 import { errorMessage } from "../../services/api";
 import { formatDate } from "../../services/format";
-import { useCreateRender } from "../../services/renderApi";
+import { useCreateRender, useRenderSelection } from "../../services/renderApi";
 import type { Job } from "../../services/types";
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -150,6 +150,7 @@ function AnalysisResults({
   const analysis = useAnalysis(summary.id, running);
   const reselect = useReselect(summary.id);
   const createRender = useCreateRender();
+  const renderAll = useRenderSelection();
   const [draft, setDraft] = useState<number | null>(null);
 
   if (analysis.isPending) return <Loading label="Chargement des extraits…" />;
@@ -215,6 +216,34 @@ function AnalysisResults({
         </div>
       )}
       {running && a.candidates.length === 0 && <Loading label="Analyse en cours…" />}
+      {!running && a.selected_count > 0 && (
+        <div className="threshold">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={renderAll.isPending}
+            onClick={() => renderAll.mutate(a.id)}
+          >
+            Monter les {a.selected_count} extrait(s) sélectionné(s)
+          </button>
+          <span className="hint">
+            Ajoute un montage par extrait sélectionné ; ceux déjà montés ou en cours sont ignorés.
+          </span>
+          {renderAll.isError && (
+            <span className="job-error" role="alert">
+              {errorMessage(renderAll.error)}
+            </span>
+          )}
+          {renderAll.data && (
+            <span className="note" role="status">
+              {renderAll.data.created.length} montage(s) ajouté(s) à la file
+              {renderAll.data.skipped_candidate_ids.length > 0 &&
+                `, ${renderAll.data.skipped_candidate_ids.length} déjà monté(s)`}
+              .
+            </span>
+          )}
+        </div>
+      )}
       {createRender.isError && (
         <p className="job-error" role="alert">
           {errorMessage(createRender.error)}

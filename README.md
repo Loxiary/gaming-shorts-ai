@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 5 — audio et facecam.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 6 — finalisation de la V1.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–180 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -10,6 +10,9 @@ Application locale (Windows 11) destinée à transformer des vidéos longues de 
 > de synthèse factuelle**, une **musique de votre bibliothèque sous licence**, et **exclut un
 > facecam** par recadrage. Chaque short est **contrôlé**, accompagné d'un **rapport de risques
 > informatif** avec les crédits à publier, et **n'est exporté qu'après votre confirmation**.
+> La file permet la pause et la reprise, les réglages courants se modifient dans l'interface,
+> l'espace disque se surveille et se nettoie (aperçu puis confirmation), et la base se sauvegarde.
+> Recette des 17 critères d'acceptation : `docs/RECETTE_V1.md`.
 
 Documents de référence (racine du dépôt) : `CAHIER_DES_CHARGES.md`, `ARCHITECTURE_TECHNIQUE.md`,
 `CLAUDE_INSTRUCTIONS.md`, `PROMPT_INITIAL_CLAUDE_CODE.txt`. Audit machine : `docs/ENVIRONNEMENT.md`.
@@ -135,6 +138,40 @@ d'autorisation. Seuls ces morceaux sont choisis (selon l'ambiance proposée par 
 crédit est ajouté au rapport et à la fiche d'export. Aucune musique n'est ajoutée par-dessus une
 musique d'origine conservée.
 
+### File, réglages, stockage et sauvegardes (Phase 6)
+
+- **Pause / reprise** : « Pause » sur un job en attente le suspend aussitôt ; sur un job en cours,
+  la pause prend effet à la fin de l'étape en cours. « Reprendre » le remet dans la file, à
+  l'étape suivante (les étapes terminées ne sont jamais rejouées). Un job en pause compte comme
+  actif (pas de doublon) et peut être annulé.
+- **Montage en lot** : « Monter les N extrait(s) sélectionné(s) » ajoute un montage par extrait
+  sélectionné ; ceux déjà montés ou en cours sont ignorés (pas de double dépense).
+- **Réglages globaux** (Paramètres) : hauteur de téléchargement, durée maximale des sources,
+  espace minimal, précision et langue de la transcription, effort de l'IA, images par extrait,
+  résolution d'analyse, vitesse d'encodage, délais de rétention. Le `.env` reste la référence ;
+  une valeur modifiée s'applique **au début du job suivant**. Chemins, ports et clé API ne sont
+  jamais modifiables depuis l'interface.
+- **Stockage** : espace libre, taille par dossier et par projet. Nettoyage en deux temps
+  (**aperçu, puis confirmation**) par catégorie : fichiers intermédiaires régénérables (7 jours
+  par défaut), shorts jamais exportés et vidéos sources (désactivés par défaut), anciennes
+  sauvegardes de migration (la plus récente est gardée). **Jamais touchés** : exports, modèles,
+  musique, journaux, base courante, ni les fichiers d'un projet dont un job est actif. Les fiches
+  sont conservées : une vidéo source supprimée se retélécharge depuis le projet
+  (« Retélécharger la vidéo »). Option de nettoyage automatique quotidien, limitée aux fichiers
+  intermédiaires (désactivée par défaut).
+- **Sauvegardes** : archive ZIP dans `GSA_DATA_DIR\backups` (copie cohérente de la base, profils,
+  réglages, manifeste). **Jamais** le `.env`, la clé API ni les médias. Profils exportables et
+  importables en JSON (page Profils ; un nom déjà pris reçoit le suffixe « (importé) »).
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m app.cli.backup create
+.\.venv\Scripts\python.exe -m app.cli.backup list
+# Restauration : application ARRÊTÉE (scripts\stop.ps1). La base actuelle est d'abord copiée
+# (gaming_shorts.avant-restauration-<date>.db), puis remplacée et migrée si besoin.
+.\.venv\Scripts\python.exe -m app.cli.backup restore D:\GamingShortsAI\data\backups\gsa-backup-….zip
+```
+
 ### Droits
 
 Le statut des droits (inconnu / créateur / autorisation / licence) est une **déclaration de
@@ -179,6 +216,13 @@ géoblocage, protection anti-robot) : ces cas échouent avec un message explicit
 | PATCH | `/api/music/{id}` | Titre, artiste, licence, source, ambiances, confirmation d'autorisation |
 | GET | `/api/music/{id}/audio` | Écoute d'un morceau |
 | GET | `/api/audio/status` | Modèles audio/facecam et voix installés, ambiances |
+| POST | `/api/jobs/{id}/pause`, `/api/jobs/{id}/resume` | Pause sûre entre deux étapes / reprise |
+| POST | `/api/analyses/{id}/renders` | Monter tous les extraits sélectionnés (déjà montés ignorés) |
+| GET/PUT | `/api/settings/runtime` | Réglages globaux modifiables (`null` = valeur du `.env`) |
+| GET | `/api/storage` | Espace disque, par dossier et par projet, délais de rétention |
+| POST | `/api/storage/cleanup` | Nettoyage : `dry_run: true` = aperçu (défaut), `false` = suppression |
+| GET/POST | `/api/backups`, GET/DELETE `/api/backups/{nom}` | Sauvegardes (création, téléchargement, suppression confirmée) |
+| GET | `/api/profiles-export`, POST `/api/profiles-import` | Export / import des profils (JSON) |
 
 Documentation interactive : http://127.0.0.1:8000/docs (quand l'API tourne).
 
@@ -359,6 +403,9 @@ FFmpeg et ffprobe sont réels (vidéos et musiques synthétiques générées pen
 | « Détecteur de musique absent », « Détecteur de visages absent », « Aucune voix installée » | `cd backend; .\.venv\Scripts\python.exe -m app.cli.models download --all` |
 | « Aucune musique utilisable » | Déposer des morceaux dans `GSA_DATA_DIR\music`, page Musique > Analyser le dossier, renseigner la licence et confirmer |
 | Musique d'origine « encore détectable » | Augmenter l'atténuation dans le profil (jusqu'à 40 dB) et écouter l'aperçu audio du short |
+| « Ce job n'est pas en pause » / pause sans effet immédiat | La pause d'un job en cours attend la fin de l'étape en cours (transcription, séparation audio, rendu) : c'est voulu, pour ne rien laisser à moitié fait |
+| « Vidéo source absente » après un nettoyage | Fiche du projet > « Retélécharger la vidéo » (relance l'import : téléchargement et transcription) |
+| Restauration refusée : « L'application semble lancée » | `scripts\stop.ps1`, puis relancer la commande de restauration |
 | Narration jamais ajoutée | Normal si l'IA la juge inutile (parole dense) ; elle n'est jamais générée sans IA. Vérifier aussi que le profil est en mode « Si l'IA la juge utile » |
 
 ## Limites connues
@@ -378,6 +425,10 @@ FFmpeg et ffprobe sont réels (vidéos et musiques synthétiques générées pen
 - Les sous-titres traduits sont répartis sur la durée des phrases d'origine (pas de
   surlignage mot à mot en traduction).
 - Aucune publication automatique : les shorts exportés sont à publier vous-même.
+- Pas de transitions ni d'effets ponctuels autres que les zooms (hors périmètre de la V1).
+- La restauration d'une sauvegarde se fait en ligne de commande, application arrêtée ; les
+  médias ne sont pas sauvegardés (une source supprimée se retélécharge, un short exporté reste
+  dans `exports`).
 - L'énergie sonore signale un son plus fort que d'habitude, pas sa nature : la détection
   d'extraits ne reconnaît ni rires ni cris (la musique n'est détectée qu'au montage).
 - Le mode « signaux seuls » ne comprend pas le contenu : ses notes sont approximatives
@@ -391,7 +442,8 @@ FFmpeg et ffprobe sont réels (vidéos et musiques synthétiques générées pen
   l'AV1 que lentement (libaom) ou via le GPU. Les vidéos déjà importées en AV1 restent lisibles.
 - faster-whisper 1.2.1 ne peut pas décoder lui-même l'audio avec PyAV 19 : l'application lui
   fournit directement le WAV extrait par FFmpeg (aucun impact fonctionnel).
-- Paramètres en lecture seule dans l'interface (modification via `.env`).
+- Chemins, ports, modèle Whisper, appareil de calcul et clé API se modifient uniquement dans
+  `.env` (redémarrage nécessaire).
 - `stop.ps1` arrête les processus de force : un job en cours est repris au redémarrage suivant
   (après `GSA_WORKER_STALE_SECONDS`), sans rejouer les étapes terminées.
 - `npm audit` signale des vulnérabilités modérées dans les outils de développement (ESLint /

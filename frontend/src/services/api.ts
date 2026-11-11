@@ -139,4 +139,7 @@ export const api = {
   cancelJob: (id: string) =>
     request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/cancel`),
   retryJob: (id: string) => request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/retry`),
+  pauseJob: (id: string) => request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/pause`),
+  resumeJob: (id: string) =>
+    request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/resume`),
 };

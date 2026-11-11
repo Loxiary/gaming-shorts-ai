@@ -10,6 +10,7 @@ const FILTERS: (JobStatus | "all")[] = [
   "all",
   "queued",
   "running",
+  "paused",
   "completed",
   "failed",
   "cancelled",

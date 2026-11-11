@@ -26,12 +26,13 @@ from app.models.base import Base, UTCDateTime, new_id
 class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
+    PAUSED = "paused"  # mis en pause entre deux étapes ; reprend là où il s'est arrêté
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
 
-ACTIVE_JOB_STATUSES = (JobStatus.QUEUED, JobStatus.RUNNING)
+ACTIVE_JOB_STATUSES = (JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.PAUSED)
 TERMINAL_JOB_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
 
@@ -87,6 +88,9 @@ class Job(Base):
     current_step: Mapped[str | None] = mapped_column(String(80))
     error_message: Mapped[str | None] = mapped_column(Text)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    pause_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_by: Mapped[str | None] = mapped_column(String(120))
     heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
@@ -109,14 +113,16 @@ class Job(Base):
         CheckConstraint(_in_list("status", JobStatus), name="status_valid"),
         CheckConstraint("progress >= 0 AND progress <= 1", name="progress_range"),
         Index("ix_jobs_status_created_at", "status", "created_at"),
-        # Anti-doublon : un seul job actif (queued/running) d'un même type par projet
+        # Anti-doublon : un seul job actif (queued/running/paused) d'un même type par projet
         # (sauf montages : plusieurs extraits d'un projet peuvent attendre dans la file).
         Index(
             "uq_jobs_active_project_kind",
             "project_id",
             "kind",
             unique=True,
-            sqlite_where=text("status IN ('queued', 'running') AND kind != 'render_clip'"),
+            sqlite_where=text(
+                "status IN ('queued', 'running', 'paused') AND kind != 'render_clip'"
+            ),
         ),
     )
 

@@ -1310,3 +1310,63 @@ details.tools[open] > summary {
 .music-strip span.on {
   background: var(--accent);
 }
+
+/* --- Phase 6 : pause, réglages, stockage, sauvegardes */
+.badge-paused {
+  color: #d9c2ff;
+  background: rgba(124, 92, 255, 0.15);
+  border-color: rgba(124, 92, 255, 0.4);
+}
+.runtime-setting {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 220px) auto auto;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.runtime-setting .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+.usage-table caption {
+  text-align: left;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.usage-table th,
+.usage-table td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.cleanup-list {
+  max-height: 260px;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+.backup-row {
+  margin-bottom: 0.4rem;
+}
+.profiles-transfer {
+  margin: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .runtime-setting {
+    grid-template-columns: 1fr;
+  }
+}

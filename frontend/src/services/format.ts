@@ -52,6 +52,7 @@ export const RIGHTS_LABELS: Record<RightsStatus, string> = {
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   queued: "En attente",
   running: "En cours",
+  paused: "En pause",
   completed: "Terminé",
   failed: "Échec",
   cancelled: "Annulé",

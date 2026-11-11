@@ -123,6 +123,7 @@ export interface Render {
   facecam?: FacecamResult | null;
   credits?: Credit[];
   preview_audio_url?: string | null;
+  files_purged?: boolean;
   export_warnings: string[];
   ready: boolean;
   cost_usd: number;
@@ -139,6 +140,12 @@ export const renderApi = {
   list: (projectId: string) => request<Render[]>("GET", `/api/projects/${enc(projectId)}/renders`),
   confirmExport: (id: string) =>
     request<Render>("POST", `/api/renders/${enc(id)}/confirm-export`, { acknowledged: true }),
+  renderSelection: (analysisId: string) =>
+    request<{ created: Render[]; skipped_candidate_ids: string[] }>(
+      "POST",
+      `/api/analyses/${enc(analysisId)}/renders`,
+      {},
+    ),
   remove: (id: string) => request<void>("DELETE", `/api/renders/${enc(id)}?confirm=true`),
   exports: () => request<Render[]>("GET", "/api/exports"),
 };
@@ -166,6 +173,14 @@ function useInvalidate() {
 export function useCreateRender() {
   const invalidate = useInvalidate();
   return useMutation({ mutationFn: (id: string) => renderApi.create(id), onSuccess: invalidate });
+}
+
+export function useRenderSelection() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (analysisId: string) => renderApi.renderSelection(analysisId),
+    onSuccess: invalidate,
+  });
 }
 
 export function useConfirmExport() {

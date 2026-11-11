@@ -13,13 +13,13 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.5.0"
-APP_PHASE = "Phase 5 — audio et facecam"
+APP_VERSION = "0.6.0"
+APP_PHASE = "Phase 6 — finalisation V1"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 
-DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs", "models", "music")
+DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs", "models", "music", "backups")
 DB_FILENAME = "gaming_shorts.db"
 
 
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     whisper_model: str = "large-v3-turbo"
     whisper_device: str = "auto"  # auto | cuda | cpu
     whisper_compute_type: str = "auto"  # auto | int8_float16 | float16 | int8 | float32
-    whisper_language: str = ""  # vide = détection automatique
+    whisper_language: str = Field(default="", pattern="^([a-z]{2})?$")  # vide = auto
     whisper_vad: bool = True
     whisper_beam_size: int = Field(default=5, ge=1, le=10)
 
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("ANTHROPIC_API_KEY", "GSA_ANTHROPIC_API_KEY")
     )
     llm_model: str = "claude-sonnet-5-5"
-    llm_effort: str = "medium"  # low | medium | high
+    llm_effort: str = Field(default="medium", pattern="^(low|medium|high)$")
     # Tarifs en $ par million de jetons (à mettre à jour si Anthropic change ses prix).
     llm_price_input_per_mtok: float = Field(default=2.0, ge=0)
     llm_price_output_per_mtok: float = Field(default=10.0, ge=0)
@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     render_x264_preset: str = Field(
         default="faster", pattern="^(ultrafast|superfast|veryfast|faster|fast|medium|slow)$"
     )
+
+    # --- Stockage (Phase 6). Délais en jours, 0 = jamais. Modifiables dans Paramètres.
+    retention_temp_days: int = Field(default=7, ge=0, le=3650)
+    retention_render_days: int = Field(default=0, ge=0, le=3650)
+    retention_source_days: int = Field(default=0, ge=0, le=3650)
+    retention_auto: bool = False  # nettoyage quotidien des seuls fichiers intermédiaires
 
     @field_validator("data_dir")
     @classmethod
