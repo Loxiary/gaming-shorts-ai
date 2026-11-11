@@ -204,6 +204,14 @@ function AnalysisResults({
         </div>
       )}
 
+      {!running && a.candidates.length > 0 && a.selected_count === 0 && (
+        <div className="alert alert-warn" role="note">
+          Aucun extrait n'atteint le seuil de {a.threshold} (meilleure note :{" "}
+          {Math.round(Math.max(...a.candidates.map((c) => c.overall_score ?? 0)))}). La vidéo ne
+          contient peut-être pas de moment adapté à ce profil : essayez un autre profil ou abaissez
+          le seuil.
+        </div>
+      )}
       {running && a.candidates.length === 0 && <Loading label="Analyse en cours…" />}
       <div className="candidate-list">
         {ranked.map((c, i) => (

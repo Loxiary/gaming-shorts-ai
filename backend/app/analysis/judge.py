@@ -194,7 +194,8 @@ visible, passage incompréhensible…). Liste vide s'il n'y en a pas.
 def user_content(item: JudgeInput) -> list[dict[str, object]]:
     lines = []
     for start, end, text in item.transcript:
-        outside = end <= item.start or start >= item.end
+        middle = (start + end) / 2  # lignes redécoupées aux bornes : le milieu tranche
+        outside = middle < item.start or middle >= item.end
         tag = " (hors extrait)" if outside else ""
         lines.append(f"[{mmss(start)}–{mmss(end)}]{tag} {text}")
     transcript = "\n".join(lines) or "(aucune parole détectée dans cet intervalle)"

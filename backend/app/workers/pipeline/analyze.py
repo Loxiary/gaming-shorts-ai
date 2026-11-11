@@ -267,9 +267,60 @@ def sentence_bounds(segments: list[TranscriptSegment]) -> tuple[list[float], lis
     return starts, ends
 
 
+def transcript_for_window(
+    segments: list[TranscriptSegment], start: float, end: float, context: float
+) -> list[tuple[float, float, str]]:
+    """Transcription autour d'un extrait, présentée PHRASE PAR PHRASE et coupée aux bornes.
+
+    Les segments Whisper coupent arbitrairement les phrases (« And also the » / « world
+    was… ») : envoyés tels quels, l'IA croit que l'extrait commence ou finit au milieu d'une
+    phrase. On reconstruit donc des lignes à partir des mots horodatés : une nouvelle ligne
+    commence après une ponctuation de fin de phrase, ou quand on franchit une borne de
+    l'extrait (les parties hors extrait sont ensuite marquées comme telles dans le prompt).
+    """
+    words: list[tuple[float, float, str]] = []
+    for seg in segments:
+        if seg.end_seconds <= start - context or seg.start_seconds >= end + context:
+            continue
+        seg_words = json.loads(seg.words_json) if seg.words_json else []
+        if not seg_words:  # pas de mots horodatés : le segment entier tient lieu de mot
+            seg_words = [{"start": seg.start_seconds, "end": seg.end_seconds, "word": seg.text}]
+        for w in seg_words:
+            ws, we = float(w["start"]), float(w["end"])
+            if we > start - context and ws < end + context:
+                words.append((ws, we, str(w["word"])))
+
+    def part(ws: float, we: float) -> int:
+        middle = (ws + we) / 2
+        return 0 if middle < start else 2 if middle >= end else 1
+
+    lines: list[tuple[float, float, str]] = []
+    current: list[tuple[float, float, str]] = []
+    current_part = -1
+    for ws, we, text in words:
+        p_ = part(ws, we)
+        if current and p_ != current_part:
+            lines.append(_join(current))
+            current = []
+        current.append((ws, we, text))
+        current_part = p_
+        if text.strip().endswith(_SENTENCE_END):
+            lines.append(_join(current))
+            current = []
+    if current:
+        lines.append(_join(current))
+    return lines
+
+
+def _join(words: list[tuple[float, float, str]]) -> tuple[float, float, str]:
+    return words[0][0], words[-1][1], "".join(w for _, _, w in words).strip()
+
+
 def _excerpt(segments: list[TranscriptSegment], start: float, end: float) -> str:
     return " ".join(
-        seg.text for seg in segments if seg.end_seconds > start and seg.start_seconds < end
+        text
+        for a, b, text in transcript_for_window(segments, start, end, context=0.0)
+        if start <= (a + b) / 2 < end
     ).strip()
 
 
@@ -540,12 +591,9 @@ def scoring_candidates(ctx: StepContext) -> dict[str, Any]:
             item = JudgeInput(
                 start=c.start_seconds,
                 end=c.end_seconds,
-                transcript=[
-                    (seg.start_seconds, seg.end_seconds, seg.text)
-                    for seg in segments
-                    if seg.end_seconds > c.start_seconds - 10
-                    and seg.start_seconds < c.end_seconds + 10
-                ],
+                transcript=transcript_for_window(
+                    segments, c.start_seconds, c.end_seconds, context=10.0
+                ),
                 signals_summary=_signals_summary(c),
                 frames=frames,
             )

@@ -166,3 +166,27 @@ def test_sentence_bounds_use_word_punctuation() -> None:
     starts, ends = sentence_bounds(segments)  # type: ignore[arg-type]
     assert starts == [0.0, 3.0, 8.0]
     assert ends == [3.0, 8.0]
+
+
+def test_transcript_is_split_at_exact_window_bounds(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """L'IA ne doit pas croire qu'un extrait commence au milieu d'une phrase à cause
+    d'un segment Whisper qui chevauche la borne."""
+    import json as _json
+    from types import SimpleNamespace
+
+    from app.analysis.judge import JudgeInput, user_content
+    from app.workers.pipeline.analyze import _excerpt, transcript_for_window
+
+    words = [(8, 9, " fin"), (9, 10, " précédente."), (10, 11, " Regarde"), (11, 12, " ça!")]
+    seg = SimpleNamespace(
+        start_seconds=8,
+        end_seconds=12,
+        text="fin précédente. Regarde ça!",
+        words_json=_json.dumps([{"start": a, "end": b, "word": w} for a, b, w in words]),
+    )
+    lines = transcript_for_window([seg], start=10, end=80, context=10)  # type: ignore[list-item]
+    assert lines == [(8.0, 10.0, "fin précédente."), (10.0, 12.0, "Regarde ça!")]
+    text = user_content(JudgeInput(10, 80, lines, "", []))[0]["text"]
+    assert "(hors extrait) fin précédente." in text
+    assert "] Regarde ça!" in text and "(hors extrait) Regarde" not in text
+    assert _excerpt([seg], 10, 80) == "Regarde ça!"  # type: ignore[list-item]
