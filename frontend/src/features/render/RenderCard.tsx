@@ -146,6 +146,19 @@ export function RenderCard({ render: r }: { render: Render }) {
                   : "aucun"}
               </dd>
             </div>
+            <div>
+              <dt>Effets ponctuels</dt>
+              <dd>
+                {r.plan.effects && r.plan.effects.length > 0
+                  ? r.plan.effects
+                      .map(
+                        (e) =>
+                          `${e.kind === "flash" ? "Flash" : "Tremblement"} à ${formatTimecode(e.t)} (${e.reason})`,
+                      )
+                      .join(" · ")
+                  : "aucun"}
+              </dd>
+            </div>
             {r.plan.warnings.length > 0 && (
               <div>
                 <dt>Remarques</dt>

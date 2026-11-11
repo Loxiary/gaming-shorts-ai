@@ -110,6 +110,23 @@ class EditingProfile(Base):
         String(20), nullable=False, default="crop", server_default="crop"
     )
 
+    # --- Transitions et effets ponctuels (Phase 7)
+    effects_mode: Mapped[str] = mapped_column(  # « auto » : l'IA propose ; « off »
+        String(20), nullable=False, default="auto", server_default="auto"
+    )
+    transition_in: Mapped[str] = mapped_column(  # none | fade | zoom
+        String(20), nullable=False, default="zoom", server_default="zoom"
+    )
+    transition_out: Mapped[str] = mapped_column(  # none | fade
+        String(20), nullable=False, default="fade", server_default="fade"
+    )
+    sfx_mode: Mapped[str] = mapped_column(  # « auto » : bruitages sur effets et transitions
+        String(20), nullable=False, default="auto", server_default="auto"
+    )
+    sfx_level_db: Mapped[float] = mapped_column(
+        Float, nullable=False, default=-14.0, server_default="-14"
+    )
+
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow

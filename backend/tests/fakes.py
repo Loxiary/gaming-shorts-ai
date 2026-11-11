@@ -277,12 +277,14 @@ class FakeEditor:
         hook_kind: str = "original",
         narration: list[tuple[float, str]] | None = None,
         music_mood: str = "",
+        effects: list[tuple[float, str, float]] | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.systems: list[str] = []
         self.hook_kind = hook_kind
         self.narration = narration or []
         self.music_mood = music_mood
+        self.effects = effects or []
 
     def call(
         self,
@@ -327,6 +329,10 @@ class FakeEditor:
                 narration_reason="Contexte utile (test)." if self.narration else "",
                 narration=[ed.NarrationLine(t=t, text=x) for t, x in self.narration],
                 music_mood=self.music_mood,
+                effects=[
+                    ed.EffectMoment(t=t, kind=k, duration=d, reason="test")  # type: ignore[arg-type]
+                    for t, k, d in self.effects
+                ],
             )
         if validate:
             validate(parsed)

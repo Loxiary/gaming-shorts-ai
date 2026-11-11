@@ -80,15 +80,26 @@ def _sentences(
             a, b = float(w["start"]), float(w["end"])
             if (a + b) / 2 < start or (a + b) / 2 >= end:
                 continue
-            current.append(
-                (max(a - start, 0.0), min(b - start, end - start), str(w["word"]).strip())
-            )
-            if str(w["word"]).strip().endswith((".", "!", "?", "…")):
+            raw = str(w["word"])
+            item = (max(a - start, 0.0), min(b - start, end - start), raw.strip())
+            if current and is_continuation(raw):
+                # Morceau découpé par Whisper (« 4 » + « ,000 ») : recollé, sans espace.
+                prev = current[-1]
+                current[-1] = (prev[0], item[1], prev[2] + item[2])
+            else:
+                current.append(item)
+            if raw.strip().endswith((".", "!", "?", "…")):
                 sentences.append(_sentence(current))
                 current = []
     if current:
         sentences.append(_sentence(current))
     return sentences, t.language
+
+
+def is_continuation(raw_word: str) -> bool:
+    """Jeton Whisper qui prolonge le mot précédent : pas d'espace initiale et commence par une
+    ponctuation de liaison (« ,000 », « .5 », « -minute », « 's »)."""
+    return bool(raw_word) and not raw_word[0].isspace() and raw_word[0] in ",.-'’%"
 
 
 def _sentence(words: list[tuple[float, float, str]]) -> ed.Sentence:
@@ -179,6 +190,7 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
                     profile.get("cta_text"),
                     narration=profile.get("narration_mode", "auto") == "auto",
                     music=profile.get("music_mode", "library") == "library",
+                    effects=profile.get("effects_mode", "auto") == "auto",
                 ),
                 content=ed.editorial_content(
                     cand.get("summary"),
@@ -217,6 +229,8 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
         plan.hook_text = ""
     if not cta_enabled:
         plan.cta_text = ""
+    if profile.get("effects_mode", "auto") != "auto":
+        plan.effects = []
     if note:
         plan.warnings.append(note)
 
@@ -379,6 +393,9 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         x264_preset=ctx.settings.render_x264_preset,
         crop=crop,
         audio_file=audio_file,
+        effects=plan.effects,
+        transition_in=profile.get("transition_in", "none"),
+        transition_out=profile.get("transition_out", "none"),
     )
     with ctx.session_factory() as s:
         r = _render(ctx, s)

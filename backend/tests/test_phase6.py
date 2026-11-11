@@ -267,7 +267,7 @@ def test_backup_contains_db_and_settings_but_no_secret(
     b = client.post("/api/backups")
     assert b.status_code == 201, b.text
     info = b.json()
-    assert info["valid"] and info["counts"]["projects"] == 1 and info["schema_revision"] == "0006"
+    assert info["valid"] and info["counts"]["projects"] == 1 and info["schema_revision"] == "0007"
     assert [x["name"] for x in client.get("/api/backups").json()] == [info["name"]]
 
     resp = client.get(f"/api/backups/{info['name']}")
@@ -361,3 +361,21 @@ def test_batch_render_of_selected_candidates_skips_already_rendered(
     again = client.post(f"/api/analyses/{analysis['id']}/renders", json={}).json()
     assert again["created"] == [] and sorted(again["skipped_candidate_ids"]) == sorted(selected)
     assert client.post("/api/analyses/inconnue/renders", json={}).status_code == 404
+
+
+def test_backup_works_on_older_schema_before_migration(
+    migrated: Settings, session_factory: sessionmaker[Session]
+) -> None:
+    """Sauvegarder juste AVANT une migration : la base n'a pas encore les nouvelles colonnes."""
+    from app.services import backup
+    from app.services.profiles import ensure_default_profiles
+
+    with session_factory() as s:
+        ensure_default_profiles(s)
+    con = sqlite3.connect(str(migrated.db_path))
+    con.execute("ALTER TABLE editing_profiles DROP COLUMN sfx_level_db")  # simule un schéma ancien
+    con.commit()
+    con.close()
+    with session_factory() as s:
+        info = backup.create_backup(s, migrated)
+    assert info["valid"] and info["counts"]["profiles"] == 5

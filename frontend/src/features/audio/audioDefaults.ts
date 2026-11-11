@@ -13,3 +13,12 @@ export const DEFAULT_AUDIO = {
   source_music_reduction_db: 15,
   facecam_mode: "crop",
 } satisfies Partial<ProfileInput>;
+
+/** Transitions et effets ponctuels par défaut (Phase 7, alignés sur le backend). */
+export const DEFAULT_EFFECTS = {
+  effects_mode: "auto",
+  transition_in: "zoom",
+  transition_out: "fade",
+  sfx_mode: "auto",
+  sfx_level_db: -14,
+} satisfies Partial<ProfileInput>;

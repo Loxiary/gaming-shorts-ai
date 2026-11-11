@@ -104,6 +104,23 @@ export function RenderAudioView({
             )}
           </dd>
         </div>
+        {audio?.sfx && (
+          <div>
+            <dt>Bruitages</dt>
+            <dd>
+              {audio.sfx.status === "added"
+                ? `${audio.sfx.events?.length ?? 0} bruitage(s) synthétisé(s) à ${audio.sfx.level_db} dB : ` +
+                  (audio.sfx.events ?? [])
+                    .map(
+                      (e) => `${e.kind === "impact" ? "impact" : "souffle"} ${formatTimecode(e.t)}`,
+                    )
+                    .join(", ")
+                : audio.sfx.status === "none"
+                  ? "Aucun (ni effet ni transition sonore)"
+                  : "Désactivés (profil)"}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Musique ajoutée</dt>
           <dd>

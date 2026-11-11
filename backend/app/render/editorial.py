@@ -22,6 +22,9 @@ MAX_ZOOMS = 3
 MAX_NARRATION_LINES = 4
 MAX_NARRATION_CHARS = 160
 MUSIC_MOODS = ("énergique", "calme", "épique", "drôle", "tendu", "mystérieux")
+MAX_EFFECTS = 4
+EFFECT_SPACING = 2.5  # secondes minimum entre deux effets (pas de surcharge)
+EFFECT_DURATIONS = {"flash": (0.1, 0.5), "shake": (0.3, 1.0)}
 
 LANG_NAMES = {
     "fr": "français",
@@ -38,6 +41,13 @@ LANG_NAMES = {
 
 class ZoomMoment(BaseModel):
     t: float  # secondes depuis le début du short
+    duration: float
+    reason: str
+
+
+class EffectMoment(BaseModel):
+    t: float  # secondes depuis le début du short
+    kind: Literal["flash", "shake"]
     duration: float
     reason: str
 
@@ -60,6 +70,8 @@ class EditorialPlan(BaseModel):
     narration_reason: str = ""
     narration: list[NarrationLine] = []
     music_mood: str = ""
+    # Phase 7 : effets ponctuels (vide pour les plans antérieurs et le plan de repli).
+    effects: list[EffectMoment] = []
 
 
 class TranslatedSentence(BaseModel):
@@ -117,7 +129,35 @@ def validate_plan(
             raise ValueError(f"ligne de narration hors de l'extrait (t={line.t})")
     if plan.music_mood and plan.music_mood not in MUSIC_MOODS:
         plan.music_mood = ""
+    plan.effects, dropped = filter_effects(plan.effects, duration)
+    plan.warnings += dropped
     return plan
+
+
+def filter_effects(
+    effects: list[EffectMoment], duration: float
+) -> tuple[list[EffectMoment], list[str]]:
+    """Garde les effets valides (dans l'extrait, durée correcte, espacés d'au moins
+    EFFECT_SPACING s, MAX_EFFECTS au plus) ; écarte les autres en le signalant. Un effet
+    mal placé ne doit jamais faire perdre tout le plan éditorial."""
+    kept: list[EffectMoment] = []
+    dropped: list[str] = []
+    for e in sorted(effects, key=lambda x: x.t):
+        lo, hi = EFFECT_DURATIONS[e.kind]
+        why = None
+        if not lo <= e.duration <= hi:
+            why = f"durée {e.duration:g} s hors de {lo:g}–{hi:g} s"
+        elif not (e.t >= 0.5 and e.t + e.duration <= duration - 0.5):
+            why = "hors de l'extrait"
+        elif kept and e.t - kept[-1].t < EFFECT_SPACING:
+            why = f"moins de {EFFECT_SPACING:g} s après l'effet précédent"
+        elif len(kept) >= MAX_EFFECTS:
+            why = f"plus de {MAX_EFFECTS} effets"
+        if why:
+            dropped.append(f"Effet « {e.kind} » à {e.t:.1f} s écarté ({why}).")
+        else:
+            kept.append(e)
+    return kept, dropped
 
 
 def normalize_text(text: str) -> str:
@@ -151,8 +191,20 @@ def editorial_system(
     cta_hint: str | None,
     narration: bool = False,
     music: bool = False,
+    effects: bool = False,
 ) -> str:
     lang = LANG_NAMES.get(language, language)
+    effects_rule = (
+        f"""
+9. effects : 0 à {MAX_EFFECTS} effets ponctuels, UNIQUEMENT sur des moments réellement forts \
+(explosion, impact, chute, révélation, réaction vive) et jamais par habitude : aucun effet \
+vaut mieux qu'un effet gratuit. kind = « flash » (éclair blanc bref, 0,1 à 0,5 s, pour une \
+révélation ou un instant marquant) ou « shake » (tremblement de caméra, 0,3 à 1 s, pour un \
+impact ou une explosion). t en secondes depuis le début du short, au moins \
+{EFFECT_SPACING:g} s entre deux effets. reason : le moment précis qui le justifie."""
+        if effects
+        else "\n9. effects : liste vide."
+    )
     narration_rule = (
         f"""
 7. Narration (voix de synthèse ajoutée) : narration_needed = true UNIQUEMENT si une courte \
@@ -197,7 +249,7 @@ oralement forts. t en secondes depuis le début du short, durée de 1 à 3 s. Au
 mieux qu'un zoom gratuit.
 5. warnings : limites ou points de vigilance pour le montage (liste vide sinon).
 6. N'invente rien : appuie-toi uniquement sur la transcription, le résumé et les moments \
-fournis.{narration_rule}{music_rule}"""
+fournis.{narration_rule}{music_rule}{effects_rule}"""
 
 
 def editorial_content(

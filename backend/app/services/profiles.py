@@ -121,6 +121,11 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         source_music_mode=profile.source_music_mode,
         source_music_reduction_db=profile.source_music_reduction_db,
         facecam_mode=profile.facecam_mode,
+        effects_mode=profile.effects_mode,
+        transition_in=profile.transition_in,
+        transition_out=profile.transition_out,
+        sfx_mode=profile.sfx_mode,
+        sfx_level_db=profile.sfx_level_db,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -182,6 +187,11 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.source_music_mode = data.source_music_mode
     profile.source_music_reduction_db = data.source_music_reduction_db
     profile.facecam_mode = data.facecam_mode
+    profile.effects_mode = data.effects_mode
+    profile.transition_in = data.transition_in
+    profile.transition_out = data.transition_out
+    profile.sfx_mode = data.sfx_mode
+    profile.sfx_level_db = data.sfx_level_db
 
 
 def _commit(session: Session, profile: EditingProfile, make_default: bool) -> EditingProfile:

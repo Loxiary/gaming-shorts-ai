@@ -37,6 +37,12 @@ export interface Profile {
   source_music_mode: "attenuate" | "detect" | "off";
   source_music_reduction_db: number;
   facecam_mode: "crop" | "off";
+  // Transitions et effets ponctuels (Phase 7).
+  effects_mode: "auto" | "off";
+  transition_in: "none" | "fade" | "zoom";
+  transition_out: "none" | "fade";
+  sfx_mode: "auto" | "off";
+  sfx_level_db: number;
   created_at: string;
   updated_at: string;
 }

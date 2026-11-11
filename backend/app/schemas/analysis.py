@@ -51,6 +51,12 @@ class ProfileIn(BaseModel):
     source_music_mode: Literal["attenuate", "detect", "off"] = "attenuate"
     source_music_reduction_db: float = Field(default=15.0, ge=3, le=40)
     facecam_mode: Literal["crop", "off"] = "crop"
+    # --- Transitions et effets ponctuels (Phase 7)
+    effects_mode: Literal["auto", "off"] = "auto"
+    transition_in: Literal["none", "fade", "zoom"] = "zoom"
+    transition_out: Literal["none", "fade"] = "fade"
+    sfx_mode: Literal["auto", "off"] = "auto"
+    sfx_level_db: float = Field(default=-14.0, ge=-40, le=0)
 
     @field_validator("narration_voice")
     @classmethod
@@ -137,6 +143,11 @@ class ProfileOut(BaseModel):
     source_music_mode: str
     source_music_reduction_db: float
     facecam_mode: str
+    effects_mode: str
+    transition_in: str
+    transition_out: str
+    sfx_mode: str
+    sfx_level_db: float
     created_at: datetime
     updated_at: datetime
 

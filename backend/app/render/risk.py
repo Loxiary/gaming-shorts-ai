@@ -59,6 +59,14 @@ def build_risk_report(
         added.append(f"narration de synthèse ({len(narration.get('lines', []))} ligne(s))")
     if has_music:
         added.append("musique de fond sous licence")
+    effects = (plan or {}).get("effects") or []
+    if effects:
+        added.append(f"{len(effects)} effet(s) ponctuel(s)")
+    if (
+        profile.get("transition_in", "none") != "none"
+        or profile.get("transition_out", "none") != "none"
+    ):
+        added.append("transitions")
     missing = []
     if not has_narration:
         missing.append("narration ou commentaire original")

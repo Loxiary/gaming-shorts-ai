@@ -22,13 +22,13 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import APP_VERSION, Settings
 from app.core.errors import AppError, NotFoundError
 from app.core.time import utcnow
-from app.models import ClipRender, EditingProfile, Project
+from app.models import EditingProfile
 from app.services import profiles as profile_svc
 from app.services import runtime_settings
 from app.services.budget import api_enabled, monthly_cap
@@ -72,18 +72,23 @@ def create_backup(session: Session, settings: Settings) -> dict[str, Any]:
     tmp_db = folder / f".{name}.db"
     tmp_zip = folder / f".{name}.part"
     revision = session.scalar(text("SELECT version_num FROM alembic_version"))
+    # Lecture brute (SQL) : la sauvegarde doit marcher même si la base a un schéma plus ancien
+    # que le code (cas typique : sauvegarde juste avant d'appliquer une migration).
     profiles = [
-        profile_svc.to_out(p).model_dump(mode="json")
-        for p in session.scalars(select(EditingProfile).order_by(EditingProfile.name))
+        {
+            k: (str(v) if not isinstance(v, int | float | str | type(None)) else v)
+            for k, v in row.items()
+        }
+        for row in session.execute(text("SELECT * FROM editing_profiles ORDER BY name")).mappings()
     ]
     manifest = {
         "app_version": APP_VERSION,
         "schema_revision": revision,
         "created_at": now.isoformat(),
         "counts": {
-            "projects": session.scalar(select(func.count()).select_from(Project)),
+            "projects": session.scalar(text("SELECT count(*) FROM projects")),
             "profiles": len(profiles),
-            "renders": session.scalar(select(func.count()).select_from(ClipRender)),
+            "renders": session.scalar(text("SELECT count(*) FROM clip_renders")),
         },
         "contains": ["gaming_shorts.db", "profiles.json", "settings.json"],
         "not_included": [

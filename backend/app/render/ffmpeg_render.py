@@ -16,7 +16,7 @@ from typing import Any
 from app.adapters.media.ffmpeg import FfmpegTool, _tool
 from app.adapters.types import CancelCheck, ProgressCallback
 from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
-from app.render.editorial import ZoomMoment
+from app.render.editorial import EffectMoment, ZoomMoment
 from app.workers.errors import StepError
 
 OUT_W, OUT_H = 1080, 1920
@@ -24,15 +24,64 @@ TARGET_LUFS = -14.0  # niveau courant des plateformes de shorts
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-def zoom_expression(zooms: list[ZoomMoment], intensity: float) -> str:
-    """Facteur d'agrandissement en fonction de t : bosse sinusoïdale par zoom."""
-    if intensity <= 0 or not zooms:
-        return "1"
-    terms = [
-        f"between(t,{z.t:.3f},{z.t + z.duration:.3f})*sin(PI*(t-{z.t:.3f})/{z.duration:.3f})"
-        for z in zooms
-    ]
-    return f"1+{intensity:.3f}*({'+'.join(terms)})"
+INTRO_ZOOM = 0.15  # transition d'entrée « zoom » : de 115 % à 100 % en INTRO_SECONDS
+INTRO_SECONDS = 0.6
+FADE_IN_SECONDS = 0.4
+FADE_OUT_SECONDS = 0.6
+SHAKE_PX = 18  # amplitude maximale du tremblement (pixels de la sortie 1080×1920)
+SHAKE_MARGIN = 1.04  # agrandissement qui donne la marge nécessaire au tremblement
+FLASH_BRIGHTNESS = 0.6
+
+
+def zoom_expression(zooms: list[ZoomMoment], intensity: float, intro_zoom: bool = False) -> str:
+    """Facteur d'agrandissement en fonction de t : bosse sinusoïdale par zoom, plus la
+    transition d'entrée éventuelle (zoom arrière rapide au début)."""
+    terms = []
+    if intensity > 0 and zooms:
+        bumps = [
+            f"between(t,{z.t:.3f},{z.t + z.duration:.3f})*sin(PI*(t-{z.t:.3f})/{z.duration:.3f})"
+            for z in zooms
+        ]
+        terms.append(f"{intensity:.3f}*({'+'.join(bumps)})")
+    if intro_zoom:
+        terms.append(f"{INTRO_ZOOM}*pow(max(0,1-t/{INTRO_SECONDS}),2)")
+    return "1+" + "+".join(terms) if terms else "1"
+
+
+def effects_chain(
+    effects: list[EffectMoment], duration: float, transition_in: str, transition_out: str
+) -> str:
+    """Filtres appliqués à l'image 1080×1920 composée, avant les textes (qui restent nets et
+    lisibles) : tremblement, flash, fondus d'entrée et de sortie. Chaîne vide si rien."""
+    parts: list[str] = []
+    shakes = [e for e in effects if e.kind == "shake"]
+    flashes = [e for e in effects if e.kind == "flash"]
+    if shakes:
+        w = int(round(OUT_W * SHAKE_MARGIN / 2) * 2)
+        h = int(round(OUT_H * SHAKE_MARGIN / 2) * 2)
+
+        def wave(freq: float, phase: float) -> str:
+            env = [
+                f"between(t,{e.t:.3f},{e.t + e.duration:.3f})*(1-(t-{e.t:.3f})/{e.duration:.3f})"
+                for e in shakes
+            ]
+            return f"{SHAKE_PX}*({'+'.join(env)})*sin(2*PI*{freq}*t+{phase})"
+
+        parts.append(
+            f"scale={w}:{h},crop={OUT_W}:{OUT_H}"
+            f":x='(iw-ow)/2+{wave(13, 0)}':y='(ih-oh)/2+{wave(17, 1.3)}'"
+        )
+    if flashes:
+        pulses = [
+            f"between(t,{e.t:.3f},{e.t + e.duration:.3f})*(1-(t-{e.t:.3f})/{e.duration:.3f})"
+            for e in flashes
+        ]
+        parts.append(f"eq=brightness='{FLASH_BRIGHTNESS}*({'+'.join(pulses)})':eval=frame")
+    if transition_in == "fade":
+        parts.append(f"fade=t=in:st=0:d={FADE_IN_SECONDS}")
+    if transition_out == "fade" and duration > 2 * FADE_OUT_SECONDS:
+        parts.append(f"fade=t=out:st={duration - FADE_OUT_SECONDS:.3f}:d={FADE_OUT_SECONDS}")
+    return ",".join(parts)
 
 
 def filter_graph(
@@ -46,9 +95,11 @@ def filter_graph(
     duration: float,
     crop: list[float] | None = None,
     audio_input: int = 0,
+    effects: str = "",
 ) -> str:
     """``crop`` : (x, y, w, h) normalisés appliqués à la source (exclusion du facecam).
-    ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée."""
+    ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée.
+    ``effects`` : chaîne de ``effects_chain`` (avant les textes)."""
     fonts = ":fontsdir='C\\:/Windows/Fonts'" if sys.platform == "win32" else ""
     fade_out = max(duration - 0.3, 0)
     z = f"({zoom})"
@@ -76,7 +127,7 @@ def filter_graph(
             f"[bgb][fgz]overlay=x=(W-w)/2:y=(H-h)/2"
         )
     return (
-        f"{video},ass={ass_file}{fonts},format=yuv420p[v];"
+        f"{video}{',' + effects if effects else ''},ass={ass_file}{fonts},format=yuv420p[v];"
         f"[{audio_input}:a]loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,afade=t=in:d=0.3,"
         f"afade=t=out:st={fade_out:.3f}:d=0.3,aresample=48000[a]"
     )
@@ -103,6 +154,9 @@ def render_short(
     x264_preset: str = "faster",
     crop: list[float] | None = None,
     audio_file: str | None = None,
+    effects: list[EffectMoment] | None = None,
+    transition_in: str = "none",
+    transition_out: str = "none",
 ) -> Path:
     """``audio_file`` : piste mixée (relative au dossier de travail) remplaçant l'audio source."""
     fps = min(src_fps or 30.0, 60.0)
@@ -111,11 +165,12 @@ def render_short(
         src_w=src_w,
         src_h=src_h,
         fps=fps,
-        zoom=zoom_expression(zooms, zoom_intensity),
+        zoom=zoom_expression(zooms, zoom_intensity, intro_zoom=transition_in == "zoom"),
         ass_file=ass_name,
         duration=duration,
         crop=crop,
         audio_input=1 if audio_file else 0,
+        effects=effects_chain(effects or [], duration, transition_in, transition_out),
     )
     extra_input = ["-i", audio_file] if audio_file else []
     codec_args = (

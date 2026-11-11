@@ -337,7 +337,26 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
                 music_info["status"] = "error"
                 notes.append(f"Musique « {track.title or track.file_path} » illisible : {exc}")
 
-    # 4. Mixage ------------------------------------------------------------------------
+    # 4. Bruitages (Phase 7) : synthétisés, calés sur les effets et la transition d'entrée.
+    sfx_info: dict[str, Any] = {"mode": profile.get("sfx_mode", "auto"), "status": "disabled"}
+    sfx_track = np.zeros((2, n), dtype=np.float32)
+    if sfx_info["mode"] == "auto":
+        from app.audio.sfx import build_track
+
+        events: list[tuple[float, str]] = []
+        if profile.get("transition_in") == "zoom":
+            events.append((0.3, "whoosh"))
+        for e in plan.effects:
+            events.append((e.t, "impact" if e.kind == "shake" else "whoosh"))
+        if events:
+            level = float(profile.get("sfx_level_db", -14.0))
+            raw, placed = build_track(events, n, sr)
+            sfx_track = raw * mix.db_to_gain(level)
+            sfx_info.update(status="added", level_db=level, events=placed, synthetic=True)
+        else:
+            sfx_info["status"] = "none"
+
+    # 5. Mixage ------------------------------------------------------------------------
     ctx.check_cancel()
     ctx.report_progress(0.85, "Mixage…")
     game = game * mix.db_to_gain(float(profile.get("game_level_db", 0.0)))
@@ -347,6 +366,7 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
         game
         + voice_track * mix.db_to_gain(float(profile.get("narration_level_db", 0.0)))
         + music_track
+        + sfx_track
     )
     mix.write_wav(workdir / "audio_mix.wav", final)
     preview = workdir / "audio_preview.m4a"
@@ -359,6 +379,7 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
         "source_music": source_music,
         "narration": narration_info,
         "music": music_info,
+        "sfx": sfx_info,
         "levels": {
             "game_db": float(profile.get("game_level_db", 0.0)),
             "narration_db": float(profile.get("narration_level_db", 0.0)),
@@ -379,6 +400,7 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
         "narration": narration_info["status"],
         "narration_lines": len(narration_info["lines"]),
         "music": music_info["status"],
+        "sfx": sfx_info["status"],
     }
 
 

@@ -13,7 +13,8 @@ import type { Criterion, Profile, ProfileInput, SubtitleStyle } from "../../serv
 import { adminApi, useImportProfiles } from "../../services/adminApi";
 import { errorMessage } from "../../services/api";
 import { AudioSettings } from "../audio/AudioSettings";
-import { DEFAULT_AUDIO } from "../audio/audioDefaults";
+import { DEFAULT_AUDIO, DEFAULT_EFFECTS } from "../audio/audioDefaults";
+import { EffectsSettings } from "../audio/EffectsSettings";
 
 function emptyProfile(criteria: Criterion[]): ProfileInput {
   return {
@@ -37,6 +38,7 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     cta_text: null,
     render_encoder: "libx264",
     ...DEFAULT_AUDIO,
+    ...DEFAULT_EFFECTS,
   };
 }
 
@@ -299,6 +301,7 @@ function ProfileEditor({
         </label>
         <MontageSettings data={data} set={set} />
         <AudioSettings data={data} set={set} />
+        <EffectsSettings data={data} set={set} />
         <label className="checkbox">
           <input
             type="checkbox"

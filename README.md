@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 6 — finalisation de la V1.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 7 — transitions et effets ponctuels.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–180 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -12,6 +12,8 @@ Application locale (Windows 11) destinée à transformer des vidéos longues de 
 > informatif** avec les crédits à publier, et **n'est exporté qu'après votre confirmation**.
 > La file permet la pause et la reprise, les réglages courants se modifient dans l'interface,
 > l'espace disque se surveille et se nettoie (aperçu puis confirmation), et la base se sauvegarde.
+> Le montage ajoute aussi des transitions d'entrée et de sortie et, sur les seuls moments forts
+> choisis par l'IA, des effets ponctuels (flash, tremblement) avec bruitages synthétisés.
 > Recette des 17 critères d'acceptation : `docs/RECETTE_V1.md`.
 
 Documents de référence (racine du dépôt) : `CAHIER_DES_CHARGES.md`, `ARCHITECTURE_TECHNIQUE.md`,
@@ -113,7 +115,7 @@ file ; un même extrait ne peut pas être monté deux fois en parallèle.
 | `detecting_facecam` | 10 images de l'extrait, détecteur de visages YuNet (position seulement, aucune reconnaissance d'identité). Un visage **au même endroit, près d'un bord, sur ≥ 50 % des images** = facecam : recadrage du côté qui retire le moins d'image (avertissement au-delà de 35 %). Cas douteux (25–50 %, visage central) : signalé, sans recadrage |
 | `preparing_audio` | Musique d'origine détectée seconde par seconde (PANNs CNN14, classe « Music »), puis atténuée par **séparation de sources** (Demucs htdemucs, processeur) : voix intactes, autres sources baissées de N dB pendant la musique, musique résiduelle re-mesurée. Narration Piper (voix du profil, langue vérifiée), décalée dans un silence si elle couvre la parole, sinon abandonnée. Musique de la bibliothèque (licence confirmée uniquement), bouclée, avec fondus. Ducking calé sur les horodatages connus (parole, narration). Aperçu audio AAC au niveau final, écoutable dès cette étape |
 | `preparing_subtitles` | Sous-titres ASS : 1 à 6 mots par groupe, mot prononcé surligné, mots clés en couleur ; la narration ajoutée est aussi sous-titrée. Mode « traduire » : traduction IA phrase par phrase, **stockée à part et affichée comme traduction** (la transcription source n'est jamais modifiée) |
-| `rendering` | FFmpeg : recadrage facecam éventuel, gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, piste mixée normalisée à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
+| `rendering` | FFmpeg : recadrage facecam éventuel, transitions (zoom d'ouverture ou fondu, fondu au noir final) et effets ponctuels (flash, tremblement) appliqués **avant** les textes, qui restent nets, gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, piste mixée normalisée à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
 | `quality_check` | Fichier réellement produit : présence, **durée 61–180 s**, 1080×1920, H.264, yuv420p, AAC, lecture complète sans erreur (critiques) ; durée attendue, synchronisation A/V, cadence, volume, saturation (avertissements) |
 | `building_risk_report` | Source et créateur, droits déclarés, transformation éditoriale (narration et musique comprises), risque de « contenu réutilisé », musique d'origine (absente / atténuée / encore détectable / conservée / non analysée), facecam (exclu / absent / incertain / non vérifié), **crédits à publier** (voix CC BY, musique), avertissements de l'IA, recommandations — **jamais bloquant** |
 
@@ -137,6 +139,26 @@ morceau renseignez titre, artiste, **licence**, source, ambiances, et cochez la 
 d'autorisation. Seuls ces morceaux sont choisis (selon l'ambiance proposée par l'IA) et leur
 crédit est ajouté au rapport et à la fiche d'export. Aucune musique n'est ajoutée par-dessus une
 musique d'origine conservée.
+
+### Transitions et effets ponctuels (Phase 7)
+
+Réglables par profil (« Transitions et effets ponctuels ») :
+
+| Réglage | Choix | Défaut |
+|---|---|---|
+| Effets | l'IA en propose 0 à 4, **uniquement sur des moments réellement forts** ; « aucun » | IA |
+| Transition d'entrée | zoom d'ouverture (115 % → 100 % en 0,6 s), fondu depuis le noir, aucune | zoom |
+| Transition de sortie | fondu au noir sur 0,6 s (l'appel à l'action reste lisible), aucune | fondu |
+| Bruitages | souffle (transition, flash) et impact (tremblement), ou aucun | oui, -14 dB |
+
+- **Flash** : éclair blanc de 0,1 à 0,5 s. **Tremblement** : secousse amortie de 0,3 à 1 s,
+  18 px au plus (image agrandie de 4 % pour garder les bords pleins).
+- Contre la surcharge, le code vérifie chaque effet proposé : 4 au plus, au moins 2,5 s
+  d'écart, dans l'extrait, avec une durée valide. Un effet hors règle est écarté et signalé dans
+  les remarques du plan, sans faire perdre le reste du plan (accroche, zooms…).
+- Sans IA (plan de repli), aucun effet n'est ajouté ; les transitions s'appliquent.
+- Les bruitages sont **synthétisés par le code** (bruit filtré, sinus amorti) : aucun fichier
+  tiers, donc aucune licence ni crédit. Ils sont déterministes : un même montage donne le même son.
 
 ### File, réglages, stockage et sauvegardes (Phase 6)
 
@@ -425,7 +447,8 @@ FFmpeg et ffprobe sont réels (vidéos et musiques synthétiques générées pen
 - Les sous-titres traduits sont répartis sur la durée des phrases d'origine (pas de
   surlignage mot à mot en traduction).
 - Aucune publication automatique : les shorts exportés sont à publier vous-même.
-- Pas de transitions ni d'effets ponctuels autres que les zooms (hors périmètre de la V1).
+- Effets limités au flash et au tremblement, transitions au zoom d'ouverture et aux fondus ;
+  sur un extrait calme et très commenté, l'IA n'en propose souvent aucun (comportement voulu).
 - La restauration d'une sauvegarde se fait en ligne de commande, application arrêtée ; les
   médias ne sont pas sauvegardés (une source supprimée se retélécharge, un short exporté reste
   dans `exports`).

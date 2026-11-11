@@ -55,8 +55,10 @@ juge une narration utile), pas à une fonction absente.
   commentaire (où une narration est utile).
 - **Une seule source réelle testée** : la sélection des extraits et les seuils par défaut
   gagneraient à être réglés sur plusieurs jeux.
-- **Transitions et effets ponctuels** (§8) : non réalisés en V1 (zooms seulement), choix de
-  périmètre de la Phase 6.
+- **Transitions et effets ponctuels** (§8) : ajoutés en Phase 7 (flash, tremblement, zoom
+  d'ouverture, fondus, bruitages synthétisés). Sur la vidéo réelle (visite commentée, sans
+  impact), l'IA n'a proposé aucun effet : transitions et souffle d'ouverture vérifiés en réel,
+  flash et tremblement vérifiés par mesure de luminance sur rendu de test.
 - **Musique d'origine** : une atténuation réduit le risque de réclamation sans le supprimer ; le
   détecteur repère encore une musique très atténuée (voir README, « Limites connues »).
 - **Concurrence** : un seul job à la fois (choix du cahier des charges, §15).

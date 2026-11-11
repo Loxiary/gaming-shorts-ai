@@ -69,6 +69,7 @@ export interface AudioReport {
     mood?: string | null;
     level_db?: number;
   };
+  sfx?: { mode: string; status: string; level_db?: number; events?: { t: number; kind: string }[] };
   levels: Record<string, number>;
   notes: string[];
 }
@@ -96,6 +97,7 @@ export interface EditorialPlan {
   narration_reason?: string;
   narration?: { t: number; text: string }[];
   music_mood?: string;
+  effects?: { t: number; kind: "flash" | "shake"; duration: number; reason: string }[];
 }
 
 export interface Render {

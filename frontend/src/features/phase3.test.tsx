@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { Analysis, Candidate, Profile } from "../services/analysisTypes";
 import type { ProjectDetail } from "../services/types";
 import { health, makeProject, mockFetch, renderApp } from "../test/utils";
-import { DEFAULT_AUDIO } from "./audio/audioDefaults";
+import { DEFAULT_AUDIO, DEFAULT_EFFECTS } from "./audio/audioDefaults";
 
 const CRITERIA = [
   { key: "hook", label: "Force de l'accroche" },
@@ -42,6 +42,7 @@ const profile: Profile = {
   cta_text: null,
   render_encoder: "libx264",
   ...DEFAULT_AUDIO,
+  ...DEFAULT_EFFECTS,
   created_at: "2026-11-10T19:00:00Z",
   updated_at: "2026-11-10T19:00:00Z",
 };
