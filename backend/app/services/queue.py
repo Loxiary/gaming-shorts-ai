@@ -105,8 +105,8 @@ def enqueue_job(session: Session, project_id: str, kind: str, *, internal: bool 
     definition = get_job_kind(kind)
     if definition is None:
         raise AppError(f"Type de job inconnu : {kind}")
-    if kind == "analyze_clips" and not internal:
-        raise AppError("Une analyse se lance depuis la fiche du projet (choix du profil).")
+    if kind in {"analyze_clips", "render_clip"} and not internal:
+        raise AppError("Ce type de job se lance depuis la fiche du projet.")
     if kind == "ingest_youtube":
         has_source = session.scalar(
             select(SourceMedia.id).where(SourceMedia.project_id == project_id)
@@ -114,7 +114,7 @@ def enqueue_job(session: Session, project_id: str, kind: str, *, internal: bool 
         if not has_source:
             raise AppError("Ce projet n'a pas de source : utilisez la page « Importer ».")
 
-    active = session.scalar(
+    active = kind != "render_clip" and session.scalar(
         select(Job.id).where(
             Job.project_id == project_id, Job.kind == kind, Job.status.in_(ACTIVE_JOB_STATUSES)
         )

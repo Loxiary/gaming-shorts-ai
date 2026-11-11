@@ -7,6 +7,7 @@ const NAV = [
   { to: "/importer", label: "Importer", end: false },
   { to: "/projets", label: "Bibliothèque", end: false },
   { to: "/file", label: "File d'attente", end: false },
+  { to: "/exports", label: "Exports", end: false },
   { to: "/profils", label: "Profils", end: false },
   { to: "/couts", label: "Coûts API", end: false },
   { to: "/parametres", label: "Paramètres", end: false },
@@ -63,9 +64,9 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 3.</strong> Import, transcription et détection des clips disponibles. Le
-            montage vidéo, les sous-titres et l'export ne sont{" "}
-            <strong>pas encore implémentés</strong>.
+            <strong>Phase 4.</strong> Import, transcription, détection, montage vertical et export
+            confirmé disponibles. Narration, musique, atténuation de la musique d'origine et facecam
+            ne sont <strong>pas encore implémentés</strong>.
           </div>
           <div className="status-pills" aria-live="polite">
             <BackendStatus />

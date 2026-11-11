@@ -178,10 +178,12 @@ class FfmpegTool:
         check_cancel: CancelCheck,
         failure: str,
         cleanup: list[Path],
+        cwd: Path | None = None,
     ) -> None:
         """Lance FFmpeg avec suivi de progression (-progress pipe:1) et annulation sûre."""
         proc = subprocess.Popen(
             cmd,
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

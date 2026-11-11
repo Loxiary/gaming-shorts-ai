@@ -25,6 +25,7 @@ from app.models.entities import (
     TranscriptSegment,
     WorkerHeartbeat,
 )
+from app.models.render import ClipRender
 
 __all__ = [
     "CRITERIA",
@@ -34,6 +35,7 @@ __all__ = [
     "AppSetting",
     "ClipAnalysis",
     "ClipCandidate",
+    "ClipRender",
     "ClipScore",
     "EditingProfile",
     "SceneSegment",

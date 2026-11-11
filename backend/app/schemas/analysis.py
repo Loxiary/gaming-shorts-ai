@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -30,6 +31,27 @@ class ProfileIn(BaseModel):
     max_candidates: int = Field(default=12, ge=1, le=50)
     use_vision: bool = True
     is_default: bool = False
+    # --- Montage (Phase 4)
+    subtitle_mode: Literal["source", "translate", "off"] = "source"
+    subtitle_style: dict[str, Any] = Field(default_factory=dict)
+    layout: Literal["blur", "fill"] = "blur"
+    zoom_intensity: float = Field(default=0.12, ge=0, le=0.5)
+    hook_enabled: bool = True
+    cta_enabled: bool = True
+    cta_text: str | None = Field(default=None, max_length=200)
+    render_encoder: Literal["libx264", "h264_nvenc"] = "libx264"
+
+    @field_validator("subtitle_style")
+    @classmethod
+    def _style(cls, value: dict[str, Any]) -> dict[str, Any]:
+        from app.render.style import normalize_subtitle_style
+
+        return normalize_subtitle_style(value)
+
+    @field_validator("cta_text")
+    @classmethod
+    def _cta(cls, value: str | None) -> str | None:
+        return _strip(value)
 
     @field_validator("name")
     @classmethod
@@ -77,6 +99,14 @@ class ProfileOut(BaseModel):
     max_candidates: int
     use_vision: bool
     is_default: bool
+    subtitle_mode: str
+    subtitle_style: dict[str, Any]
+    layout: str
+    zoom_intensity: float
+    hook_enabled: bool
+    cta_enabled: bool
+    cta_text: str | None
+    render_encoder: str
     created_at: datetime
     updated_at: datetime
 

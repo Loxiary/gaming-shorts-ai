@@ -196,3 +196,28 @@ def test_missing_key_and_auth_errors(settings: Settings, tmp_path: Path) -> None
     judge._client = _Client([err])
     with pytest.raises(StepError, match="Clé API refusée"):
         judge.judge(CTX, _input(tmp_path), lambda _e: None, lambda *_: None)
+
+
+def test_credit_error_is_explained(settings: Settings, tmp_path: Path) -> None:
+    import anthropic
+    import httpx2
+
+    settings.anthropic_api_key = SecretStr("sk-ant-test")
+    judge = AnthropicJudge(settings)
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages/count_tokens")
+    err = anthropic.BadRequestError(
+        "Your credit balance is too low to access the Anthropic API.",
+        response=httpx2.Response(400, request=request),
+        body=None,
+    )
+
+    def count_tokens(**_kw):  # type: ignore[no-untyped-def]
+        raise err
+
+    client = _Client([])
+    client.messages = SimpleNamespace(count_tokens=count_tokens)
+    judge._client = client
+    with pytest.raises(StepError) as exc:
+        judge.judge(CTX, _input(tmp_path), lambda _e: None, lambda *_: None)
+    assert "Crédit API Anthropic insuffisant" in exc.value.message
+    assert "sk-ant" not in exc.value.message

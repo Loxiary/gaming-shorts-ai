@@ -50,7 +50,26 @@ ANALYZE_STEPS = (
     StepDefinition("selecting_clips", "Sélection (seuil, doublons)"),
 )
 
+RENDER_STEPS = (
+    StepDefinition("creating_editorial_plan", "Plan éditorial (accroche, appel à l'action, zooms)"),
+    StepDefinition("preparing_subtitles", "Sous-titres (traduction si demandée)"),
+    StepDefinition("rendering", "Rendu vertical 1080×1920"),
+    StepDefinition("quality_check", "Contrôle qualité du fichier"),
+    StepDefinition("building_risk_report", "Rapport de risques"),
+)
+
 JOB_KINDS: dict[str, JobKind] = {
+    "render_clip": JobKind(
+        kind="render_clip",
+        label="Montage du short",
+        description=(
+            "Prépare le plan éditorial, les sous-titres animés, rend le short vertical, "
+            "contrôle le fichier produit et établit le rapport de risques. L'export reste "
+            "soumis à votre confirmation."
+        ),
+        is_demo=False,
+        steps=RENDER_STEPS,
+    ),
     "analyze_clips": JobKind(
         kind="analyze_clips",
         label="Analyse et détection des clips",

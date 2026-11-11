@@ -18,8 +18,26 @@ export interface Profile {
   max_candidates: number;
   use_vision: boolean;
   is_default: boolean;
+  subtitle_mode: "source" | "translate" | "off";
+  subtitle_style: SubtitleStyle;
+  layout: "blur" | "fill";
+  zoom_intensity: number;
+  hook_enabled: boolean;
+  cta_enabled: boolean;
+  cta_text: string | null;
+  render_encoder: "libx264" | "h264_nvenc";
   created_at: string;
   updated_at: string;
+}
+
+export interface SubtitleStyle {
+  font: string;
+  size: number;
+  text_color: string;
+  highlight_color: string;
+  keyword_color: string;
+  uppercase: boolean;
+  max_words: number;
 }
 
 export type ProfileInput = Omit<Profile, "id" | "created_at" | "updated_at">;

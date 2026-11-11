@@ -15,6 +15,7 @@ import {
 import type { Analysis, AnalysisEngine } from "../../services/analysisTypes";
 import { errorMessage } from "../../services/api";
 import { formatDate } from "../../services/format";
+import { useCreateRender } from "../../services/renderApi";
 import type { Job } from "../../services/types";
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -148,6 +149,7 @@ function AnalysisResults({
 }) {
   const analysis = useAnalysis(summary.id, running);
   const reselect = useReselect(summary.id);
+  const createRender = useCreateRender();
   const [draft, setDraft] = useState<number | null>(null);
 
   if (analysis.isPending) return <Loading label="Chargement des extraits…" />;
@@ -213,9 +215,26 @@ function AnalysisResults({
         </div>
       )}
       {running && a.candidates.length === 0 && <Loading label="Analyse en cours…" />}
+      {createRender.isError && (
+        <p className="job-error" role="alert">
+          {errorMessage(createRender.error)}
+        </p>
+      )}
+      {createRender.isSuccess && (
+        <p className="note" role="status">
+          Montage ajouté à la file : suivez-le dans « Shorts montés » plus bas.
+        </p>
+      )}
       <div className="candidate-list">
         {ranked.map((c, i) => (
-          <CandidateCard key={c.id} candidate={c} rank={i + 1} onPreview={onPreview} />
+          <CandidateCard
+            key={c.id}
+            candidate={c}
+            rank={i + 1}
+            onPreview={onPreview}
+            onRender={(id) => createRender.mutate(id)}
+            renderPending={createRender.isPending}
+          />
         ))}
       </div>
     </div>

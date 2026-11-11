@@ -109,13 +109,14 @@ class Job(Base):
         CheckConstraint(_in_list("status", JobStatus), name="status_valid"),
         CheckConstraint("progress >= 0 AND progress <= 1", name="progress_range"),
         Index("ix_jobs_status_created_at", "status", "created_at"),
-        # Anti-doublon : un seul job actif (queued/running) d'un même type par projet.
+        # Anti-doublon : un seul job actif (queued/running) d'un même type par projet
+        # (sauf montages : plusieurs extraits d'un projet peuvent attendre dans la file).
         Index(
             "uq_jobs_active_project_kind",
             "project_id",
             "kind",
             unique=True,
-            sqlite_where=text("status IN ('queued', 'running')"),
+            sqlite_where=text("status IN ('queued', 'running') AND kind != 'render_clip'"),
         ),
     )
 

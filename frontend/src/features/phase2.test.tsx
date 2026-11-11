@@ -111,7 +111,7 @@ describe("Import", () => {
             },
           ],
         };
-      return { body: health };
+      return c.url.endsWith("/renders") ? { body: [] } : { body: health };
     });
     const user = userEvent.setup();
     renderApp("/importer");
@@ -156,7 +156,7 @@ describe("Fiche projet avec source", () => {
       if (c.url === "/api/job-kinds") return { body: [] };
       if (c.url === "/api/profiles" || c.url === "/api/projects/p1/analyses") return { body: [] };
       if (c.url.startsWith("/api/projects/p1/analysis-estimate")) return { body: estimate };
-      return { body: health };
+      return c.url.endsWith("/renders") ? { body: [] } : { body: health };
     });
     const user = userEvent.setup();
     const { container } = renderApp("/projets/p1");
@@ -181,7 +181,7 @@ describe("Fiche projet avec source", () => {
       if (c.method === "PATCH") return { body: { ...source, rights_status: "authorized" } };
       if (c.url === "/api/projects/p1") return { body: detail({ transcript: null }) };
       if (c.url === "/api/job-kinds") return { body: [] };
-      return { body: health };
+      return c.url.endsWith("/renders") ? { body: [] } : { body: health };
     });
     const user = userEvent.setup();
     renderApp("/projets/p1");
@@ -199,7 +199,7 @@ describe("Fiche projet avec source", () => {
     mockFetch((c) => {
       if (c.url === "/api/projects/p1") return { body: detail({ transcript: null }) };
       if (c.url === "/api/job-kinds") return { body: [] };
-      return { body: health };
+      return c.url.endsWith("/renders") ? { body: [] } : { body: health };
     });
     const user = userEvent.setup();
     renderApp("/projets/p1");
@@ -226,7 +226,7 @@ describe("Progression détaillée", () => {
             }),
           ],
         };
-      return { body: health };
+      return c.url.endsWith("/renders") ? { body: [] } : { body: health };
     });
     renderApp("/file");
     expect(await screen.findByText("Téléchargement")).toBeInTheDocument();

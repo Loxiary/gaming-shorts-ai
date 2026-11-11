@@ -2,11 +2,12 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 3 — analyse et détection des clips.** L'application importe des vidéos
-> YouTube, les transcrit en local, puis **détecte les moments forts et propose des extraits de 61 à
-> 180 s**, notés sur 7 critères et expliqués (IA Claude avec plafond de dépenses, ou estimation par
-> signaux sans IA), avec profils de montage et seuil réglable. Le **montage vidéo, les sous-titres,
-> le rapport de risques et l'export ne sont pas encore implémentés**.
+> **État actuel : Phase 4 — montage et export.** L'application importe des vidéos YouTube, les
+> transcrit en local, détecte et note les meilleurs extraits (61–180 s), puis **monte des shorts
+> verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
+> accroche, appel à l'action, zooms), **contrôle le fichier produit**, établit un **rapport de
+> risques informatif** et **n'exporte qu'après votre confirmation explicite**. La narration, la
+> musique ajoutée, l'atténuation de la musique d'origine et le facecam arrivent en Phase 5.
 
 Documents de référence (racine du dépôt) : `CAHIER_DES_CHARGES.md`, `ARCHITECTURE_TECHNIQUE.md`,
 `CLAUDE_INSTRUCTIONS.md`, `PROMPT_INITIAL_CLAUDE_CODE.txt`. Audit machine : `docs/ENVIRONNEMENT.md`.
@@ -96,6 +97,28 @@ l'indique. Chaque appel est journalisé (jetons, images, coût, identifiant de r
 Histoire), modifiables, duplicables, supprimables (sauf le profil par défaut). Chaque analyse
 garde une copie des réglages du profil utilisé.
 
+### Montage d'un short (`render_clip`)
+
+Lancé par « Monter ce clip » sur un extrait évalué. Plusieurs montages peuvent attendre dans la
+file ; un même extrait ne peut pas être monté deux fois en parallèle.
+
+| Étape | Rôle |
+|---|---|
+| `creating_editorial_plan` | IA : accroche (≤ 60 car., « citation » vérifiée mot pour mot dans la transcription, sinon « texte original » signalé), appel à l'action, mots clés, 0 à 3 zooms sur des moments réels. Sans IA ou plafond atteint : plan de repli (citation réelle, zooms sur les pics sonores), signalé |
+| `preparing_subtitles` | Sous-titres ASS : 1 à 6 mots par groupe, mot prononcé surligné, mots clés en couleur. Mode « traduire » : traduction IA phrase par phrase, **stockée à part et affichée comme traduction** (la transcription source n'est jamais modifiée) |
+| `rendering` | FFmpeg : gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, son normalisé à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
+| `quality_check` | Fichier réellement produit : présence, **durée 61–180 s**, 1080×1920, H.264, yuv420p, AAC, lecture complète sans erreur (critiques) ; durée attendue, synchronisation A/V, cadence, volume, saturation (avertissements) |
+| `building_risk_report` | Source et créateur, droits déclarés, transformation éditoriale, risque de « contenu réutilisé », musique et facecam non vérifiés (Phase 5), avertissements de l'IA, recommandations — **jamais bloquant** |
+
+**Export** : uniquement après confirmation (case « J'ai lu ces avertissements »). Le MP4 est copié
+dans `GSA_DATA_DIR\exports` avec une fiche JSON (source, droits, contrôle qualité, rapport de
+risques, avertissements acceptés). Les risques ne bloquent jamais l'export ; seul un fichier
+techniquement invalide (contrôle critique échoué) ne peut pas être exporté. Supprimer un rendu
+ou un projet **conserve** les fichiers exportés.
+
+**Coût réel mesuré** : environ 0,02 $ par short (plan éditorial + traduction des sous-titres),
+80 s de traitement pour un short de 78 s en 1080×1920 à 60 i/s.
+
 ### Droits
 
 Le statut des droits (inconnu / créateur / autorisation / licence) est une **déclaration de
@@ -129,6 +152,12 @@ géoblocage, protection anti-robot) : ces cas échouent avec un message explicit
 | GET | `/api/candidates/{id}/frames/{n}` | Image horodatée d'un extrait |
 | GET/PATCH | `/api/settings/api` | Clé configurée (oui/non, jamais la valeur), API activée, plafond |
 | GET | `/api/costs` | Dépenses du mois, par mois, derniers appels |
+| POST | `/api/candidates/{id}/renders` | Monter un extrait (profil facultatif) |
+| GET | `/api/projects/{id}/renders`, `/api/renders/{id}` | Rendus : plan, sous-titres, QC, rapport de risques, avertissements d'export |
+| GET | `/api/renders/{id}/video` | Short rendu (lecture, requêtes Range) |
+| POST | `/api/renders/{id}/confirm-export` | Export après confirmation (`acknowledged: true` obligatoire) |
+| DELETE | `/api/renders/{id}?confirm=true` | Supprimer un rendu (le fichier exporté est conservé) |
+| GET | `/api/exports` | Shorts exportés |
 
 Documentation interactive : http://127.0.0.1:8000/docs (quand l'API tourne).
 
@@ -197,6 +226,10 @@ installe `backend\requirements-dev.txt`, exécute `npm ci` dans `frontend\`, app
 | `GSA_DEFAULT_MONTHLY_CAP_USD` | `40` | Plafond initial (ensuite réglé dans Paramètres) |
 | `GSA_ANALYSIS_PROXY_HEIGHT` | `480` | Hauteur de la copie d'analyse |
 | `GSA_FRAMES_PER_CANDIDATE` | `8` | Images envoyées à l'IA par extrait (0 = aucune) |
+| `GSA_RENDER_X264_PRESET` | `faster` | Preset x264 du rendu (`ultrafast` … `slow`) |
+
+Les réglages de montage (sous-titres, police, couleurs, disposition, zooms, accroche, appel à
+l'action, encodeur) se font **par profil**, dans la page Profils.
 
 Les variables absentes de `.env` prennent la valeur par défaut ci-dessus.
 
@@ -275,11 +308,18 @@ ffprobe sont réels (vidéos synthétiques générées pendant les tests).
 | « IA indisponible (clé API absente) » | Ajouter `ANTHROPIC_API_KEY` dans `.env` puis redémarrer ; sinon l'analyse se fait par signaux |
 | « Plafond mensuel atteint » | Augmenter le plafond dans Paramètres ou attendre le mois suivant ; les extraits restants sont évalués par signaux |
 | « Clé API refusée par Anthropic » | Clé invalide ou révoquée : la remplacer dans `.env` puis redémarrer, et relancer le job |
+| « Crédit API Anthropic insuffisant » | Recharger le compte (console.anthropic.com, Plans & Billing), puis relancer le job |
+| « Contrôle qualité échoué » | Le fichier produit est invalide (voir l'onglet Contrôle qualité du short) : relancer le montage ; si cela persiste, essayer l'encodeur libx264 dans le profil |
+| Sous-titres sans les bonnes polices | Les polices proposées sont celles de Windows (`C:\Windows\Fonts`) |
 | Transcription lente | Un jeu ou une autre application utilise le GPU ; voir `docs/BENCHMARK_ASR.md` (`GSA_WHISPER_BEAM_SIZE=1`) |
 
 ## Limites connues
 
-- Pas encore de montage vertical, de sous-titres, de narration, de rapport de risques ni d'export.
+- Pas encore de narration, de musique ajoutée, d'atténuation de la musique d'origine ni de
+  détection du facecam (Phase 5) : le rapport de risques le signale pour chaque short.
+- Les sous-titres traduits sont répartis sur la durée des phrases d'origine (pas de
+  surlignage mot à mot en traduction).
+- Aucune publication automatique : les shorts exportés sont à publier vous-même.
 - L'énergie sonore signale un son plus fort que d'habitude, pas sa nature : aucune
   reconnaissance de rires, cris ou musique n'est faite à ce stade.
 - Le mode « signaux seuls » ne comprend pas le contenu : ses notes sont approximatives

@@ -24,6 +24,22 @@ const profile: Profile = {
   max_candidates: 12,
   use_vision: true,
   is_default: true,
+  subtitle_mode: "source",
+  subtitle_style: {
+    font: "Arial Black",
+    size: 76,
+    text_color: "#FFFFFF",
+    highlight_color: "#FFE500",
+    keyword_color: "#38E1FF",
+    uppercase: true,
+    max_words: 3,
+  },
+  layout: "blur",
+  zoom_intensity: 0.12,
+  hook_enabled: true,
+  cta_enabled: true,
+  cta_text: null,
+  render_encoder: "libx264",
   created_at: "2026-11-10T19:00:00Z",
   updated_at: "2026-11-10T19:00:00Z",
 };
@@ -179,7 +195,7 @@ function routes(extra: (url: string, method: string) => object | undefined = () 
     if (c.url === "/api/projects/p1/transcript")
       return { body: { ...project().transcript, segments: [] } };
     if (c.url === "/api/job-kinds") return { body: [] };
-    return { body: health };
+    return c.url.endsWith("/renders") ? { body: [] } : { body: health };
   });
 }
 

@@ -5,6 +5,7 @@ import { ProjectForm } from "./ProjectForm";
 import { SourcePanel } from "./SourcePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { AnalysisPanel } from "../analysis/AnalysisPanel";
+import { RendersPanel } from "../render/RendersPanel";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmptyState, ErrorBox, Loading } from "../../components/Feedback";
 import { JobCard } from "../../components/JobCard";
@@ -146,6 +147,8 @@ export function ProjectDetailPage() {
           onPreview={previewRange}
         />
       )}
+
+      {p.source && <RendersPanel projectId={p.id} />}
 
       {p.transcript ? (
         <TranscriptPanel

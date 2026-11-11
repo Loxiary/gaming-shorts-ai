@@ -4,6 +4,7 @@ import { Link, Route, Routes } from "react-router";
 import { Layout } from "../components/Layout";
 import { CostsPage } from "../features/analysis/CostsPage";
 import { ProfilesPage } from "../features/analysis/ProfilesPage";
+import { ExportsPage } from "../features/render/ExportsPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { ImportPage } from "../features/import/ImportPage";
 import { ProjectDetailPage } from "../features/projects/ProjectDetailPage";
@@ -31,6 +32,7 @@ export function AppRoutes() {
         <Route path="file" element={<QueuePage />} />
         <Route path="profils" element={<ProfilesPage />} />
         <Route path="couts" element={<CostsPage />} />
+        <Route path="exports" element={<ExportsPage />} />
         <Route path="parametres" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

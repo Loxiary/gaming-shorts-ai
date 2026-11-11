@@ -13,8 +13,8 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.3.0"
-APP_PHASE = "Phase 3 — analyse et détection des clips"
+APP_VERSION = "0.4.0"
+APP_PHASE = "Phase 4 — montage et export"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     default_monthly_cap_usd: float = Field(default=40.0, ge=0)
     analysis_proxy_height: int = Field(default=480, ge=240, le=1080)
     frames_per_candidate: int = Field(default=8, ge=0, le=20)
+
+    # --- Montage (Phase 4)
+    render_x264_preset: str = Field(
+        default="faster", pattern="^(ultrafast|superfast|veryfast|faster|fast|medium|slow)$"
+    )
 
     @field_validator("data_dir")
     @classmethod

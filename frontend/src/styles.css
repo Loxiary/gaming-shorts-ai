@@ -1144,3 +1144,122 @@ details.tools[open] > summary {
     grid-row: 2;
   }
 }
+
+/* ---------- Phase 4 : shorts montés, export ---------- */
+.render-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.render {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface-2);
+}
+
+.vertical {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 10px;
+  background: #000;
+}
+
+.vertical.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
+
+.render-body {
+  min-width: 0;
+}
+
+.render-body h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.render-actions {
+  margin-top: 1rem;
+  align-items: center;
+}
+
+.qc {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.qc li.ok span:first-child {
+  color: var(--ok);
+}
+
+.qc li.warning {
+  color: #f3d9a4;
+}
+
+.qc li.critical {
+  color: #ffb4b2;
+}
+
+/* Dans la fiche d'un short, l'espace est étroit : libellé au-dessus de la valeur. */
+.render-body .details > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.1rem;
+}
+
+.montage select,
+.montage input:not([type="checkbox"]):not([type="range"]):not([type="color"]) {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+}
+
+.montage .checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.colors {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.colors label {
+  align-items: center;
+}
+
+.colors input[type="color"] {
+  width: 3rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .render {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .render-media {
+    max-width: 280px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}

@@ -22,3 +22,5 @@ known-third-party = ["alembic"]  # le dossier local alembic/ ne doit pas masquer
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
+# En-têtes ASS : lignes de format imposées par la spécification, non découpables.
+"app/render/subtitles.py" = ["E501"]

@@ -53,7 +53,14 @@ def analyze_step(ctx: StepContext) -> dict[str, Any] | None:
     return ANALYZE_STEPS[ctx.step_name](ctx)
 
 
+def render_step(ctx: StepContext) -> dict[str, Any] | None:
+    from app.workers.pipeline.render import RENDER_STEPS
+
+    return RENDER_STEPS[ctx.step_name](ctx)
+
+
 HANDLERS: dict[str, StepHandler] = {
+    "render_clip": render_step,
     "analyze_clips": analyze_step,
     "demo": demo_step,
     "demo_failure": demo_failure_step,

@@ -264,3 +264,65 @@ class FakeJudge:
         )
         record_usage(result, len(item.frames))
         return result
+
+
+class FakeEditor:
+    """IA de montage simulée : plan éditorial et traduction déterministes, coût fictif."""
+
+    model = "fake-editor"
+    configured = True
+
+    def __init__(self, hook_kind: str = "original") -> None:
+        self.calls: list[str] = []
+        self.hook_kind = hook_kind
+
+    def call(
+        self,
+        *,
+        system,
+        content,
+        schema,
+        budget_check,
+        record,
+        validate=None,  # type: ignore[no-untyped-def]
+        max_tokens=8000,
+    ):
+        from app.analysis.judge import Usage
+        from app.analysis.llm import LLMResult
+        from app.render import editorial as ed
+
+        budget_check(0.01)
+        self.calls.append(schema.__name__)
+        if schema is ed.Translation:
+            body = content[0]["text"].split("\n")[1:]
+            parsed = ed.Translation(
+                sentences=[
+                    ed.TranslatedSentence(
+                        index=int(line.split(":", 1)[0]),
+                        text=f"Phrase traduite {line.split(':', 1)[0]}.",
+                    )
+                    for line in body
+                    if ":" in line
+                ]
+            )
+        else:
+            parsed = ed.EditorialPlan(
+                hook_text="Une partie qui démarre fort",
+                hook_kind=self.hook_kind,
+                hook_reason="test",
+                cta_text="Tu aurais fait pareil ?",
+                keywords=["numéro", "test"],
+                zooms=[ed.ZoomMoment(t=10, duration=2, reason="test")],
+                warnings=[],
+            )
+        if validate:
+            validate(parsed)
+        result = LLMResult(
+            "ok",
+            self.model,
+            parsed=parsed,
+            usage=Usage(input_tokens=2000, output_tokens=500),
+            request_id="req_ed",
+        )
+        record(result)
+        return result

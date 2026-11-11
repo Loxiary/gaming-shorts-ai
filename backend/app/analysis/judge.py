@@ -141,6 +141,20 @@ class ClipJudge(Protocol):
     ) -> JudgeResult: ...
 
 
+def api_error_message(exc: Exception, context: str) -> str:
+    """Message compréhensible pour une erreur de l'API Anthropic (sans exposer de secret)."""
+    text = str(exc).lower()
+    if "credit balance" in text:
+        return (
+            "Crédit API Anthropic insuffisant : rechargez votre compte (console.anthropic.com, "
+            "Plans & Billing), puis relancez le job."
+        )
+    if "overloaded" in text:
+        return "API Anthropic temporairement surchargée : relancez le job dans quelques minutes."
+    status = getattr(exc, "status_code", None)
+    return f"{context} : erreur de l'API Anthropic" + (f" ({status})." if status else ".")
+
+
 # --------------------------------------------------------------------------- prompt
 
 
@@ -179,7 +193,8 @@ en short, sans exagération.
 4. confidence (0 à 1) reflète la qualité des éléments disponibles : baisse-la si les images \
 ou la transcription ne permettent pas de comprendre ce qui se passe, et explique pourquoi dans \
 warnings.
-5. key_events : les moments notables avec leur instant t en secondes (dans l'extrait).
+5. key_events : les moments notables, avec t = instant en secondes DANS LA VIDÉO SOURCE \
+(compris entre start et end de l'extrait proposé).
 6. Bornes : suggested_start et suggested_end peuvent ajuster l'extrait pour démarrer sur \
 l'accroche et finir sur une chute, à {BOUNDS_TOLERANCE:.0f} s maximum des bornes proposées, avec \
 une durée comprise entre {ctx.min_duration:.0f} et {ctx.max_duration:.0f} s. Sinon, renvoie \
@@ -293,7 +308,9 @@ class AnthropicJudge:
                 model=self.model, system=system, messages=messages
             ).input_tokens
         except anthropic.APIError as exc:
-            raise StepError(f"Comptage des jetons impossible : {exc}", technical=repr(exc)) from exc
+            raise StepError(
+                api_error_message(exc, "Comptage des jetons impossible"), technical=repr(exc)
+            ) from exc
         # Estimation haute : schéma (~600 jetons) + sortie maximale.
         estimate = self._cost(Usage(input_tokens=counted + 600, output_tokens=MAX_OUTPUT_TOKENS))
         budget_check(estimate)
@@ -333,7 +350,7 @@ class AnthropicJudge:
                 raise StepError("Connexion à l'API Anthropic impossible.") from exc
             except anthropic.APIStatusError as exc:
                 raise StepError(
-                    f"Erreur de l'API Anthropic ({exc.status_code}).", technical=str(exc)
+                    api_error_message(exc, "Évaluation impossible"), technical=str(exc)
                 ) from exc
 
             u = response.usage
@@ -465,6 +482,19 @@ def signals_only_assessment(
             "audio, de parole et de montage. Le contenu réel n'a pas été compris."
         ],
     )
+
+
+def event_time_absolute(t: float, start: float, end: float) -> float:
+    """Normalise l'instant d'un événement en temps de la vidéo source.
+
+    La consigne demande le temps de la vidéo source, mais une valeur relative au début de
+    l'extrait (0 <= t <= durée, hors de l'intervalle [start, end]) est aussi acceptée.
+    """
+    if start <= t <= end:
+        return t
+    if 0 <= t <= end - start:
+        return start + t
+    return t
 
 
 def parse_raw(raw: str | None) -> dict[str, object] | None:

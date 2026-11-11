@@ -18,7 +18,7 @@ def _job(client: TestClient, job_id: str) -> dict:
 
 def test_job_kinds(client: TestClient) -> None:
     kinds = {k["kind"]: k for k in client.get("/api/job-kinds").json()}
-    assert set(kinds) == {"demo", "demo_failure", "ingest_youtube", "analyze_clips"}
+    assert set(kinds) == {"demo", "demo_failure", "ingest_youtube", "analyze_clips", "render_clip"}
     assert kinds["demo"]["is_demo"] and kinds["demo_failure"]["is_demo"]
     assert not kinds["ingest_youtube"]["is_demo"]
     assert not kinds["analyze_clips"]["is_demo"]

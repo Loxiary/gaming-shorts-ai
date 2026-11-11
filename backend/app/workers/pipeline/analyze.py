@@ -22,6 +22,7 @@ from app.analysis.judge import (
     JudgeContext,
     JudgeInput,
     JudgeResult,
+    event_time_absolute,
     signals_only_assessment,
 )
 from app.analysis.signals import Signals, compute_signals
@@ -497,7 +498,14 @@ def _save_assessment(
     c.status = result_status
     c.summary = assessment.summary
     c.reason = assessment.reason
-    c.events_json = json.dumps([e.model_dump() for e in assessment.key_events], ensure_ascii=False)
+    events = [
+        {
+            "t": round(event_time_absolute(e.t, c.start_seconds, c.end_seconds), 2),
+            "description": e.description,
+        }
+        for e in assessment.key_events
+    ]
+    c.events_json = json.dumps(events, ensure_ascii=False)
     c.warnings_json = json.dumps(warnings, ensure_ascii=False)
     c.confidence = max(0.0, min(1.0, assessment.confidence))
     c.llm_model = model

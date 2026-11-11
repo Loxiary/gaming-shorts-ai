@@ -10,7 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError, ConflictError, NotFoundError
-from app.models import CRITERIA, EditingProfile
+from app.models import CRITERIA, EditingProfile  # noqa: F401 (réexporté pour renders)
+from app.render.style import normalize_subtitle_style
 from app.schemas.analysis import ProfileIn, ProfileOut
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,16 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         max_candidates=profile.max_candidates,
         use_vision=profile.use_vision,
         is_default=profile.is_default,
+        subtitle_mode=profile.subtitle_mode,
+        subtitle_style=normalize_subtitle_style(
+            json.loads(profile.subtitle_style_json) if profile.subtitle_style_json else None
+        ),
+        layout=profile.layout,
+        zoom_intensity=profile.zoom_intensity,
+        hook_enabled=profile.hook_enabled,
+        cta_enabled=profile.cta_enabled,
+        cta_text=profile.cta_text,
+        render_encoder=profile.render_encoder,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -143,6 +154,14 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.max_duration = data.max_duration
     profile.max_candidates = data.max_candidates
     profile.use_vision = data.use_vision
+    profile.subtitle_mode = data.subtitle_mode
+    profile.subtitle_style_json = json.dumps(data.subtitle_style)
+    profile.layout = data.layout
+    profile.zoom_intensity = data.zoom_intensity
+    profile.hook_enabled = data.hook_enabled
+    profile.cta_enabled = data.cta_enabled
+    profile.cta_text = data.cta_text
+    profile.render_encoder = data.render_encoder
 
 
 def _commit(session: Session, profile: EditingProfile, make_default: bool) -> EditingProfile:

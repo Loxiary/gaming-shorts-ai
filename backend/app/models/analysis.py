@@ -51,6 +51,30 @@ class EditingProfile(Base):
     max_candidates: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
     use_vision: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # --- Montage (Phase 4). server_default : profils existants complétés à la migration.
+    # Sous-titres : « source » (verbatim), « translate » (traduction IA), « off ».
+    subtitle_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="source", server_default="source"
+    )
+    subtitle_style_json: Mapped[str | None] = mapped_column(Text)
+    layout: Mapped[str] = mapped_column(  # « blur » (fond flouté) ou « fill » (plein cadre)
+        String(20), nullable=False, default="blur", server_default="blur"
+    )
+    zoom_intensity: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.12, server_default="0.12"
+    )
+    hook_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    cta_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    cta_text: Mapped[str | None] = mapped_column(Text)  # vide = proposé par l'IA
+    render_encoder: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="libx264", server_default="libx264"
+    )
+
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow
@@ -58,6 +82,7 @@ class EditingProfile(Base):
 
     __table_args__ = (
         CheckConstraint("threshold >= 0 AND threshold <= 100", name="threshold_range"),
+        CheckConstraint("zoom_intensity >= 0 AND zoom_intensity <= 0.5", name="zoom_range"),
         CheckConstraint(
             f"min_duration >= {MIN_CLIP_SECONDS} AND max_duration <= {MAX_CLIP_SECONDS} "
             "AND min_duration <= max_duration",

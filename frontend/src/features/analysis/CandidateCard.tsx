@@ -15,9 +15,11 @@ interface Props {
   candidate: Candidate;
   rank: number;
   onPreview?: (start: number, end: number) => void;
+  onRender?: (candidateId: string) => void;
+  renderPending?: boolean;
 }
 
-export function CandidateCard({ candidate: c, rank, onPreview }: Props) {
+export function CandidateCard({ candidate: c, rank, onPreview, onRender, renderPending }: Props) {
   const [open, setOpen] = useState(false);
   const status = STATUS[c.status];
 
@@ -59,6 +61,16 @@ export function CandidateCard({ candidate: c, rank, onPreview }: Props) {
               onClick={() => onPreview(c.start_seconds, c.end_seconds)}
             >
               Prévisualiser
+            </button>
+          )}
+          {onRender && (c.status === "scored" || c.status === "signals_only") && (
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={renderPending}
+              onClick={() => onRender(c.id)}
+            >
+              Monter ce clip
             </button>
           )}
           <button

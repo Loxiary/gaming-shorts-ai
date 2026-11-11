@@ -9,7 +9,7 @@ import {
   useProfiles,
   useSaveProfile,
 } from "../../services/analysisApi";
-import type { Criterion, Profile, ProfileInput } from "../../services/analysisTypes";
+import type { Criterion, Profile, ProfileInput, SubtitleStyle } from "../../services/analysisTypes";
 import { errorMessage } from "../../services/api";
 
 function emptyProfile(criteria: Criterion[]): ProfileInput {
@@ -25,6 +25,14 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     max_candidates: 12,
     use_vision: true,
     is_default: false,
+    subtitle_mode: "source",
+    subtitle_style: { ...DEFAULT_STYLE },
+    layout: "blur",
+    zoom_intensity: 0.12,
+    hook_enabled: true,
+    cta_enabled: true,
+    cta_text: null,
+    render_encoder: "libx264",
   };
 }
 
@@ -283,6 +291,7 @@ function ProfileEditor({
           />
           Envoyer des images de chaque extrait à l'IA
         </label>
+        <MontageSettings data={data} set={set} />
         <label className="checkbox">
           <input
             type="checkbox"
@@ -306,5 +315,166 @@ function ProfileEditor({
         </div>
       </form>
     </div>
+  );
+}
+
+const DEFAULT_STYLE: SubtitleStyle = {
+  font: "Arial Black",
+  size: 76,
+  text_color: "#FFFFFF",
+  highlight_color: "#FFE500",
+  keyword_color: "#38E1FF",
+  uppercase: true,
+  max_words: 3,
+};
+
+const FONTS = ["Arial Black", "Impact", "Segoe UI Black", "Bahnschrift", "Verdana"];
+
+function MontageSettings({
+  data,
+  set,
+}: {
+  data: ProfileInput;
+  set: <K extends keyof ProfileInput>(key: K, value: ProfileInput[K]) => void;
+}) {
+  const style = data.subtitle_style;
+  const setStyle = <K extends keyof SubtitleStyle>(key: K, value: SubtitleStyle[K]) =>
+    set("subtitle_style", { ...style, [key]: value });
+
+  return (
+    <fieldset className="weights-editor montage">
+      <legend>Montage du short</legend>
+      <label>
+        Sous-titres
+        <select
+          value={data.subtitle_mode}
+          onChange={(e) => set("subtitle_mode", e.target.value as ProfileInput["subtitle_mode"])}
+        >
+          <option value="source">Langue d'origine (verbatim)</option>
+          <option value="translate">Traduits dans la langue du profil (IA)</option>
+          <option value="off">Aucun</option>
+        </select>
+      </label>
+      <label>
+        Police
+        <select value={style.font} onChange={(e) => setStyle("font", e.target.value)}>
+          {FONTS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Taille ({style.size})
+        <input
+          type="range"
+          min={40}
+          max={120}
+          value={style.size}
+          onChange={(e) => setStyle("size", Number(e.target.value))}
+        />
+      </label>
+      <label>
+        Mots par ligne ({style.max_words})
+        <input
+          type="range"
+          min={1}
+          max={6}
+          value={style.max_words}
+          onChange={(e) => setStyle("max_words", Number(e.target.value))}
+        />
+      </label>
+      <div className="colors">
+        <label>
+          Texte
+          <input
+            type="color"
+            value={style.text_color}
+            onChange={(e) => setStyle("text_color", e.target.value.toUpperCase())}
+          />
+        </label>
+        <label>
+          Mot prononcé
+          <input
+            type="color"
+            value={style.highlight_color}
+            onChange={(e) => setStyle("highlight_color", e.target.value.toUpperCase())}
+          />
+        </label>
+        <label>
+          Mots clés
+          <input
+            type="color"
+            value={style.keyword_color}
+            onChange={(e) => setStyle("keyword_color", e.target.value.toUpperCase())}
+          />
+        </label>
+      </div>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={style.uppercase}
+          onChange={(e) => setStyle("uppercase", e.target.checked)}
+        />
+        Sous-titres en majuscules
+      </label>
+      <label>
+        Disposition
+        <select
+          value={data.layout}
+          onChange={(e) => set("layout", e.target.value as ProfileInput["layout"])}
+        >
+          <option value="blur">Gameplay entier sur fond flouté</option>
+          <option value="fill">Plein cadre (bords du gameplay coupés)</option>
+        </select>
+      </label>
+      <label>
+        Intensité des zooms ({Math.round(data.zoom_intensity * 100)} %)
+        <input
+          type="range"
+          min={0}
+          max={0.5}
+          step={0.01}
+          value={data.zoom_intensity}
+          onChange={(e) => set("zoom_intensity", Number(e.target.value))}
+        />
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.hook_enabled}
+          onChange={(e) => set("hook_enabled", e.target.checked)}
+        />
+        Accroche au début
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.cta_enabled}
+          onChange={(e) => set("cta_enabled", e.target.checked)}
+        />
+        Appel à l'action à la fin
+      </label>
+      <label>
+        Texte de l'appel à l'action (vide = proposé par l'IA)
+        <input
+          value={data.cta_text ?? ""}
+          maxLength={200}
+          disabled={!data.cta_enabled}
+          onChange={(e) => set("cta_text", e.target.value || null)}
+        />
+      </label>
+      <label>
+        Encodage
+        <select
+          value={data.render_encoder}
+          onChange={(e) => set("render_encoder", e.target.value as ProfileInput["render_encoder"])}
+        >
+          <option value="libx264">Processeur (libx264)</option>
+          <option value="h264_nvenc">Carte graphique NVIDIA (NVENC)</option>
+        </select>
+      </label>
+    </fieldset>
   );
 }
