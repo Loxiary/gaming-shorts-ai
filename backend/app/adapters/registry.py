@@ -11,6 +11,7 @@ from app.core.config import Settings
 if TYPE_CHECKING:
     from app.analysis.judge import ClipJudge
     from app.analysis.llm import StructuredLLM
+    from app.audio.toolkit import AudioToolkit
 
 
 @dataclass
@@ -20,6 +21,7 @@ class Adapters:
     transcriber: Transcriber
     judge: ClipJudge | None = None  # IA d'évaluation des extraits (Phase 3)
     editor: StructuredLLM | None = None  # IA de plan éditorial et traduction (Phase 4)
+    audio: AudioToolkit | None = None  # modèles audio et facecam locaux (Phase 5)
 
 
 def default_adapters(settings: Settings) -> Adapters:
@@ -28,6 +30,7 @@ def default_adapters(settings: Settings) -> Adapters:
     from app.adapters.media.ffmpeg import FfmpegTool
     from app.analysis.judge import AnthropicJudge
     from app.analysis.llm import StructuredLLM
+    from app.audio.toolkit import AudioToolkit
 
     return Adapters(
         downloader=YouTubeDownloader(settings),
@@ -35,4 +38,5 @@ def default_adapters(settings: Settings) -> Adapters:
         transcriber=FasterWhisperTranscriber(settings),
         judge=AnthropicJudge(settings),
         editor=StructuredLLM(settings),
+        audio=AudioToolkit(settings.subdir("models")),
     )

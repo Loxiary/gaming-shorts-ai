@@ -44,20 +44,32 @@ def filter_graph(
     zoom: str,
     ass_file: str,
     duration: float,
+    crop: list[float] | None = None,
+    audio_input: int = 0,
 ) -> str:
+    """``crop`` : (x, y, w, h) normalisés appliqués à la source (exclusion du facecam).
+    ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée."""
     fonts = ":fontsdir='C\\:/Windows/Fonts'" if sys.platform == "win32" else ""
     fade_out = max(duration - 0.3, 0)
     z = f"({zoom})"
+    pre = f"fps={fps:g}"
+    if crop:
+        cx, cy, cw, ch = crop
+        pre += (
+            f",crop=w='trunc(iw*{cw:.4f}/2)*2':h='trunc(ih*{ch:.4f}/2)*2'"
+            f":x='iw*{cx:.4f}':y='ih*{cy:.4f}'"
+        )
+        src_w, src_h = max(int(src_w * cw), 2), max(int(src_h * ch), 2)
     if layout == "fill":
         video = (
-            f"[0:v]fps={fps:g},scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
+            f"[0:v]{pre},scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
             f"scale=w='trunc(iw*{z}/2)*2':h=-2:eval=frame,crop={OUT_W}:{OUT_H}"
         )
     else:
         fg_h = int(round(OUT_W * src_h / src_w / 2) * 2)
         fg_h = min(fg_h, OUT_H)
         video = (
-            f"[0:v]fps={fps:g},split=2[bg][fg];"
+            f"[0:v]{pre},split=2[bg][fg];"
             f"[bg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
             f"gblur=sigma=28,eq=brightness=-0.08[bgb];"
             f"[fg]scale=w='trunc({OUT_W}*{z}/2)*2':h=-2:eval=frame,crop={OUT_W}:{fg_h}[fgz];"
@@ -65,7 +77,7 @@ def filter_graph(
         )
     return (
         f"{video},ass={ass_file}{fonts},format=yuv420p[v];"
-        f"[0:a]loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,afade=t=in:d=0.3,"
+        f"[{audio_input}:a]loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,afade=t=in:d=0.3,"
         f"afade=t=out:st={fade_out:.3f}:d=0.3,aresample=48000[a]"
     )
 
@@ -89,7 +101,10 @@ def render_short(
     on_progress: ProgressCallback,
     check_cancel: CancelCheck,
     x264_preset: str = "faster",
+    crop: list[float] | None = None,
+    audio_file: str | None = None,
 ) -> Path:
+    """``audio_file`` : piste mixée (relative au dossier de travail) remplaçant l'audio source."""
     fps = min(src_fps or 30.0, 60.0)
     graph = filter_graph(
         layout=layout,
@@ -99,7 +114,10 @@ def render_short(
         zoom=zoom_expression(zooms, zoom_intensity),
         ass_file=ass_name,
         duration=duration,
+        crop=crop,
+        audio_input=1 if audio_file else 0,
     )
+    extra_input = ["-i", audio_file] if audio_file else []
     codec_args = (
         ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0"]
         if encoder == "h264_nvenc"
@@ -121,6 +139,7 @@ def render_short(
             f"{duration:.3f}",
             "-i",
             str(source),
+            *extra_input,
             "-filter_complex",
             graph,
             "-map",

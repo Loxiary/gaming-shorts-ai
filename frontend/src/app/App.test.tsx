@@ -12,10 +12,10 @@ import {
 } from "../test/utils";
 
 describe("Layout et connexion backend", () => {
-  it("affiche en permanence que l'IA et la vidéo ne sont pas implémentées", async () => {
+  it("affiche en permanence la phase et que rien n'est publié automatiquement", async () => {
     mockFetch((c) => (c.url === "/api/health" ? { body: health } : { body: [] }));
     renderApp("/");
-    expect(screen.getByRole("note")).toHaveTextContent(/pas encore implémentés/);
+    expect(screen.getByRole("note")).toHaveTextContent(/Rien n'est publié automatiquement/);
     expect(await screen.findByText("Backend connecté")).toBeInTheDocument();
     expect(screen.getByText("Worker actif")).toBeInTheDocument();
   });

@@ -132,6 +132,14 @@ def render_to_out(session: Session, settings: Settings, r: ClipRender) -> Render
         qc=qc,
         qc_passed=r.qc_passed,
         risk_report=risk,
+        audio_report=_loads(r.audio_report_json, None),
+        facecam=_loads(r.facecam_json, None),
+        credits=_loads(r.credits_json, []),
+        preview_audio_url=(
+            f"/api/renders/{r.id}/audio-preview"
+            if _file_ok(settings, r.preview_audio_path)
+            else None
+        ),
         export_warnings=export_warnings(risk, qc) if risk else [],
         ready=ready,
         cost_usd=round(r.cost_usd, 4),
@@ -148,6 +156,13 @@ def video_path(session: Session, settings: Settings, render_id: str) -> Path:
     if not _file_ok(settings, r.output_path):
         raise NotFoundError("Fichier vidéo du rendu non disponible.")
     return settings.resolve_data_path(r.output_path or "")
+
+
+def preview_audio_path(session: Session, settings: Settings, render_id: str) -> Path:
+    r = get_render(session, render_id)
+    if not _file_ok(settings, r.preview_audio_path):
+        raise NotFoundError("Aperçu audio non disponible.")
+    return settings.resolve_data_path(r.preview_audio_path or "")
 
 
 def _slug(text: str, limit: int = 50) -> str:
@@ -199,6 +214,9 @@ def confirm_export(
             "language": r.subtitle_language,
             "is_translation": r.subtitles_are_translation,
         },
+        "audio": _loads(r.audio_report_json, None),
+        "facecam": _loads(r.facecam_json, None),
+        "credits": _loads(r.credits_json, []),
         "quality_check": qc,
         "risk_report": risk,
         "acknowledged_warnings": warnings,

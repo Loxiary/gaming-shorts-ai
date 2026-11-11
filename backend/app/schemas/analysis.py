@@ -40,6 +40,26 @@ class ProfileIn(BaseModel):
     cta_enabled: bool = True
     cta_text: str | None = Field(default=None, max_length=200)
     render_encoder: Literal["libx264", "h264_nvenc"] = "libx264"
+    # --- Audio et facecam (Phase 5). Niveaux en dB, appliqués avant la normalisation finale.
+    narration_mode: Literal["auto", "off"] = "auto"
+    narration_voice: str = Field(default="fr_FR-siwis-medium", max_length=60)
+    narration_speed: float = Field(default=1.0, ge=0.7, le=1.4)
+    narration_level_db: float = Field(default=0.0, ge=-20, le=10)
+    game_level_db: float = Field(default=0.0, ge=-30, le=10)
+    music_mode: Literal["library", "off"] = "library"
+    music_level_db: float = Field(default=-18.0, ge=-40, le=0)
+    source_music_mode: Literal["attenuate", "detect", "off"] = "attenuate"
+    source_music_reduction_db: float = Field(default=15.0, ge=3, le=40)
+    facecam_mode: Literal["crop", "off"] = "crop"
+
+    @field_validator("narration_voice")
+    @classmethod
+    def _voice(cls, value: str) -> str:
+        from app.models_registry import PIPER_VOICES
+
+        if value not in PIPER_VOICES:
+            raise ValueError(f"Voix inconnue. Voix disponibles : {', '.join(PIPER_VOICES)}")
+        return value
 
     @field_validator("subtitle_style")
     @classmethod
@@ -107,6 +127,16 @@ class ProfileOut(BaseModel):
     cta_enabled: bool
     cta_text: str | None
     render_encoder: str
+    narration_mode: str
+    narration_voice: str
+    narration_speed: float
+    narration_level_db: float
+    game_level_db: float
+    music_mode: str
+    music_level_db: float
+    source_music_mode: str
+    source_music_reduction_db: float
+    facecam_mode: str
     created_at: datetime
     updated_at: datetime
 

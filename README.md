@@ -2,12 +2,14 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 4 — montage et export.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 5 — audio et facecam.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–180 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
-> accroche, appel à l'action, zooms), **contrôle le fichier produit**, établit un **rapport de
-> risques informatif** et **n'exporte qu'après votre confirmation explicite**. La narration, la
-> musique ajoutée, l'atténuation de la musique d'origine et le facecam arrivent en Phase 5.
+> accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
+> atténue la musique d'origine** (voix conservées), ajoute si l'IA la juge utile une **narration
+> de synthèse factuelle**, une **musique de votre bibliothèque sous licence**, et **exclut un
+> facecam** par recadrage. Chaque short est **contrôlé**, accompagné d'un **rapport de risques
+> informatif** avec les crédits à publier, et **n'est exporté qu'après votre confirmation**.
 
 Documents de référence (racine du dépôt) : `CAHIER_DES_CHARGES.md`, `ARCHITECTURE_TECHNIQUE.md`,
 `CLAUDE_INSTRUCTIONS.md`, `PROMPT_INITIAL_CLAUDE_CODE.txt`. Audit machine : `docs/ENVIRONNEMENT.md`.
@@ -104,20 +106,34 @@ file ; un même extrait ne peut pas être monté deux fois en parallèle.
 
 | Étape | Rôle |
 |---|---|
-| `creating_editorial_plan` | IA : accroche (≤ 60 car., « citation » vérifiée mot pour mot dans la transcription, sinon « texte original » signalé), appel à l'action, mots clés, 0 à 3 zooms sur des moments réels. Sans IA ou plafond atteint : plan de repli (citation réelle, zooms sur les pics sonores), signalé |
-| `preparing_subtitles` | Sous-titres ASS : 1 à 6 mots par groupe, mot prononcé surligné, mots clés en couleur. Mode « traduire » : traduction IA phrase par phrase, **stockée à part et affichée comme traduction** (la transcription source n'est jamais modifiée) |
-| `rendering` | FFmpeg : gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, son normalisé à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
+| `creating_editorial_plan` | IA : accroche (≤ 60 car., « citation » vérifiée mot pour mot dans la transcription, sinon « texte original » signalé), appel à l'action, mots clés, 0 à 3 zooms sur des moments réels ; **narration** (seulement si utile : 1 à 4 lignes factuelles, placées dans les silences) et **ambiance musicale**. Sans IA ou plafond atteint : plan de repli (citation réelle, zooms sur les pics sonores, jamais de narration), signalé |
+| `detecting_facecam` | 10 images de l'extrait, détecteur de visages YuNet (position seulement, aucune reconnaissance d'identité). Un visage **au même endroit, près d'un bord, sur ≥ 50 % des images** = facecam : recadrage du côté qui retire le moins d'image (avertissement au-delà de 35 %). Cas douteux (25–50 %, visage central) : signalé, sans recadrage |
+| `preparing_audio` | Musique d'origine détectée seconde par seconde (PANNs CNN14, classe « Music »), puis atténuée par **séparation de sources** (Demucs htdemucs, processeur) : voix intactes, autres sources baissées de N dB pendant la musique, musique résiduelle re-mesurée. Narration Piper (voix du profil, langue vérifiée), décalée dans un silence si elle couvre la parole, sinon abandonnée. Musique de la bibliothèque (licence confirmée uniquement), bouclée, avec fondus. Ducking calé sur les horodatages connus (parole, narration). Aperçu audio AAC au niveau final, écoutable dès cette étape |
+| `preparing_subtitles` | Sous-titres ASS : 1 à 6 mots par groupe, mot prononcé surligné, mots clés en couleur ; la narration ajoutée est aussi sous-titrée. Mode « traduire » : traduction IA phrase par phrase, **stockée à part et affichée comme traduction** (la transcription source n'est jamais modifiée) |
+| `rendering` | FFmpeg : recadrage facecam éventuel, gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, piste mixée normalisée à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
 | `quality_check` | Fichier réellement produit : présence, **durée 61–180 s**, 1080×1920, H.264, yuv420p, AAC, lecture complète sans erreur (critiques) ; durée attendue, synchronisation A/V, cadence, volume, saturation (avertissements) |
-| `building_risk_report` | Source et créateur, droits déclarés, transformation éditoriale, risque de « contenu réutilisé », musique et facecam non vérifiés (Phase 5), avertissements de l'IA, recommandations — **jamais bloquant** |
+| `building_risk_report` | Source et créateur, droits déclarés, transformation éditoriale (narration et musique comprises), risque de « contenu réutilisé », musique d'origine (absente / atténuée / encore détectable / conservée / non analysée), facecam (exclu / absent / incertain / non vérifié), **crédits à publier** (voix CC BY, musique), avertissements de l'IA, recommandations — **jamais bloquant** |
+
+Un modèle absent ne fait jamais échouer le montage : la fonction est sautée et le rapport le dit.
 
 **Export** : uniquement après confirmation (case « J'ai lu ces avertissements »). Le MP4 est copié
-dans `GSA_DATA_DIR\exports` avec une fiche JSON (source, droits, contrôle qualité, rapport de
-risques, avertissements acceptés). Les risques ne bloquent jamais l'export ; seul un fichier
+dans `GSA_DATA_DIR\exports` avec une fiche JSON (source, droits, audio, facecam, **crédits**,
+contrôle qualité, rapport de risques, avertissements acceptés). Les risques ne bloquent jamais l'export ; seul un fichier
 techniquement invalide (contrôle critique échoué) ne peut pas être exporté. Supprimer un rendu
 ou un projet **conserve** les fichiers exportés.
 
-**Coût réel mesuré** : environ 0,02 $ par short (plan éditorial + traduction des sous-titres),
-80 s de traitement pour un short de 78 s en 1080×1920 à 60 i/s.
+**Coût réel mesuré** : environ 0,01 à 0,02 $ par short (plan éditorial + traduction éventuelle
+des sous-titres) ; l'audio et le facecam sont locaux et gratuits. Short de 68 s en 1080×1920 à
+60 i/s : 113 s au total, dont 32 s de séparation de la musique sur le processeur.
+
+### Bibliothèque musicale
+
+L'application **ne télécharge aucune musique**. Déposez vos morceaux (mp3, wav, flac, ogg, m4a,
+opus) dans `GSA_DATA_DIR\music`, cliquez « Analyser le dossier » (page Musique), puis pour chaque
+morceau renseignez titre, artiste, **licence**, source, ambiances, et cochez la confirmation
+d'autorisation. Seuls ces morceaux sont choisis (selon l'ambiance proposée par l'IA) et leur
+crédit est ajouté au rapport et à la fiche d'export. Aucune musique n'est ajoutée par-dessus une
+musique d'origine conservée.
 
 ### Droits
 
@@ -158,6 +174,11 @@ géoblocage, protection anti-robot) : ces cas échouent avec un message explicit
 | POST | `/api/renders/{id}/confirm-export` | Export après confirmation (`acknowledged: true` obligatoire) |
 | DELETE | `/api/renders/{id}?confirm=true` | Supprimer un rendu (le fichier exporté est conservé) |
 | GET | `/api/exports` | Shorts exportés |
+| GET | `/api/renders/{id}/audio-preview` | Aperçu du mixage audio (AAC, niveau final) |
+| GET | `/api/music`, POST `/api/music/scan` | Bibliothèque musicale / analyse du dossier `music` |
+| PATCH | `/api/music/{id}` | Titre, artiste, licence, source, ambiances, confirmation d'autorisation |
+| GET | `/api/music/{id}/audio` | Écoute d'un morceau |
+| GET | `/api/audio/status` | Modèles audio/facecam et voix installés, ambiances |
 
 Documentation interactive : http://127.0.0.1:8000/docs (quand l'API tourne).
 
@@ -184,6 +205,28 @@ cd backend
 .\.venv\Scripts\python.exe -m app.cli.models status
 .\.venv\Scripts\python.exe -m app.cli.models download   # large-v3-turbo ≈ 1,6 Go
 ```
+
+### Modèles audio et facecam (Phase 5)
+
+Même principe : rien n'est téléchargé par le pipeline, `status` affiche taille et licence.
+
+```powershell
+.\.venv\Scripts\python.exe -m app.cli.models download --all   # ≈ 540 Mo au total
+```
+
+| Modèle | Rôle | Taille | Licence |
+|---|---|---|---|
+| `fr_FR-siwis-medium` | Voix française (Piper) | 63 Mo | CC BY 4.0 — **crédit ajouté automatiquement** |
+| `en_US-joe-medium` | Voix anglaise (Piper) | 63 Mo | CC0 |
+| `cnn14-16k` | Détection de musique (PANNs) | 327 Mo | code MIT, poids CC BY 4.0 |
+| `htdemucs` | Séparation de sources (Demucs v4) | 84 Mo | MIT |
+| `yunet` | Détection de visages (OpenCV Zoo) | 0,3 Mo | MIT |
+
+Les voix Piper dont la licence interdit l'usage commercial ou impose des conditions incertaines
+(ex. `ryan` NC, `tom` AGPL, `lessac` et ses dérivées) ne sont pas proposées. Les poids PyTorch
+sont chargés en **mode sûr** (`weights_only=True`, types autorisés listés) : aucun code
+contenu dans un fichier de modèle n'est exécuté. PyTorch est installé en version processeur
+(≈ 0,8 Go).
 
 ## Installation
 
@@ -277,8 +320,9 @@ npm run build           # build de production
 ```
 
 Les tests backend utilisent un dossier de données temporaire : ils ne touchent jamais `GSA_DATA_DIR`.
-yt-dlp et le modèle Whisper y sont remplacés par des faux (aucun accès réseau) ; FFmpeg et
-ffprobe sont réels (vidéos synthétiques générées pendant les tests).
+yt-dlp, le modèle Whisper, l'IA et les modèles audio/facecam (PANNs, Demucs, Piper, YuNet) y
+sont remplacés par des faux (aucun accès réseau, aucun téléchargement, aucun appel payant) ;
+FFmpeg et ffprobe sont réels (vidéos et musiques synthétiques générées pendant les tests).
 
 ## Données et confidentialité
 
@@ -312,16 +356,30 @@ ffprobe sont réels (vidéos synthétiques générées pendant les tests).
 | « Contrôle qualité échoué » | Le fichier produit est invalide (voir l'onglet Contrôle qualité du short) : relancer le montage ; si cela persiste, essayer l'encodeur libx264 dans le profil |
 | Sous-titres sans les bonnes polices | Les polices proposées sont celles de Windows (`C:\Windows\Fonts`) |
 | Transcription lente | Un jeu ou une autre application utilise le GPU ; voir `docs/BENCHMARK_ASR.md` (`GSA_WHISPER_BEAM_SIZE=1`) |
+| « Détecteur de musique absent », « Détecteur de visages absent », « Aucune voix installée » | `cd backend; .\.venv\Scripts\python.exe -m app.cli.models download --all` |
+| « Aucune musique utilisable » | Déposer des morceaux dans `GSA_DATA_DIR\music`, page Musique > Analyser le dossier, renseigner la licence et confirmer |
+| Musique d'origine « encore détectable » | Augmenter l'atténuation dans le profil (jusqu'à 40 dB) et écouter l'aperçu audio du short |
+| Narration jamais ajoutée | Normal si l'IA la juge inutile (parole dense) ; elle n'est jamais générée sans IA. Vérifier aussi que le profil est en mode « Si l'IA la juge utile » |
 
 ## Limites connues
 
-- Pas encore de narration, de musique ajoutée, d'atténuation de la musique d'origine ni de
-  détection du facecam (Phase 5) : le rapport de risques le signale pour chaque short.
+- Atténuer la musique d'origine réduit le risque de réclamation sans le supprimer : le
+  détecteur repère encore une musique très atténuée (mesuré sur un extrait réel : musique sur
+  46 % des secondes, encore détectable sur 29 % à -15 dB et 17 % à -35 dB, 0 % sur les voix
+  seules). Les bruitages du jeu sont dans les mêmes pistes que la musique : ils baissent aussi
+  pendant les passages musicaux.
+- Facecam : validé sur des images sans visage (aucun faux positif sur 20 images) et par des
+  tests sur des détections simulées ; **pas encore validé sur une vraie vidéo avec facecam**.
+  Un facecam sans visage visible (joueur hors champ) n'est pas détecté.
+- Narration : voix de synthèse (Piper), intelligible mais reconnaissable comme telle
+  (re-transcription Whisper : 72 % des mots en français, 86 % en anglais) ; sans surlignage
+  mot à mot. Elle n'est proposée que si l'IA la juge utile, ce qui est rare sur une vidéo
+  très commentée.
 - Les sous-titres traduits sont répartis sur la durée des phrases d'origine (pas de
   surlignage mot à mot en traduction).
 - Aucune publication automatique : les shorts exportés sont à publier vous-même.
-- L'énergie sonore signale un son plus fort que d'habitude, pas sa nature : aucune
-  reconnaissance de rires, cris ou musique n'est faite à ce stade.
+- L'énergie sonore signale un son plus fort que d'habitude, pas sa nature : la détection
+  d'extraits ne reconnaît ni rires ni cris (la musique n'est détectée qu'au montage).
 - Le mode « signaux seuls » ne comprend pas le contenu : ses notes sont approximatives
   (originalité fixée à 5) et clairement signalées comme telles.
 - Le coût affiché est calculé à partir des jetons facturés et des tarifs configurés : à

@@ -272,9 +272,17 @@ class FakeEditor:
     model = "fake-editor"
     configured = True
 
-    def __init__(self, hook_kind: str = "original") -> None:
+    def __init__(
+        self,
+        hook_kind: str = "original",
+        narration: list[tuple[float, str]] | None = None,
+        music_mood: str = "",
+    ) -> None:
         self.calls: list[str] = []
+        self.systems: list[str] = []
         self.hook_kind = hook_kind
+        self.narration = narration or []
+        self.music_mood = music_mood
 
     def call(
         self,
@@ -293,6 +301,7 @@ class FakeEditor:
 
         budget_check(0.01)
         self.calls.append(schema.__name__)
+        self.systems.append(system)
         if schema is ed.Translation:
             body = content[0]["text"].split("\n")[1:]
             parsed = ed.Translation(
@@ -314,6 +323,10 @@ class FakeEditor:
                 keywords=["numéro", "test"],
                 zooms=[ed.ZoomMoment(t=10, duration=2, reason="test")],
                 warnings=[],
+                narration_needed=bool(self.narration),
+                narration_reason="Contexte utile (test)." if self.narration else "",
+                narration=[ed.NarrationLine(t=t, text=x) for t, x in self.narration],
+                music_mood=self.music_mood,
             )
         if validate:
             validate(parsed)

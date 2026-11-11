@@ -25,6 +25,7 @@ from app.models.entities import (
     TranscriptSegment,
     WorkerHeartbeat,
 )
+from app.models.music import MusicTrack
 from app.models.render import ClipRender
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "ClipAnalysis",
     "ClipCandidate",
     "ClipRender",
+    "MusicTrack",
     "ClipScore",
     "EditingProfile",
     "SceneSegment",

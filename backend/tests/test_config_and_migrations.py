@@ -48,7 +48,7 @@ def test_migrations_upgrade_to_head(settings: Settings) -> None:
     upgrade_database(settings)
     ensure_database_ready(engine, settings)
     current, head = database_revision_status(engine, settings)
-    assert current == head == "0004"
+    assert current == head == "0005"
 
     tables = set(inspect(engine).get_table_names())
     assert {

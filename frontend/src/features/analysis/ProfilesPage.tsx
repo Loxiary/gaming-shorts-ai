@@ -11,6 +11,8 @@ import {
 } from "../../services/analysisApi";
 import type { Criterion, Profile, ProfileInput, SubtitleStyle } from "../../services/analysisTypes";
 import { errorMessage } from "../../services/api";
+import { AudioSettings } from "../audio/AudioSettings";
+import { DEFAULT_AUDIO } from "../audio/audioDefaults";
 
 function emptyProfile(criteria: Criterion[]): ProfileInput {
   return {
@@ -33,6 +35,7 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     cta_enabled: true,
     cta_text: null,
     render_encoder: "libx264",
+    ...DEFAULT_AUDIO,
   };
 }
 
@@ -292,6 +295,7 @@ function ProfileEditor({
           Envoyer des images de chaque extrait à l'IA
         </label>
         <MontageSettings data={data} set={set} />
+        <AudioSettings data={data} set={set} />
         <label className="checkbox">
           <input
             type="checkbox"

@@ -19,6 +19,9 @@ from pydantic import BaseModel
 MAX_HOOK_CHARS = 60
 MAX_CTA_CHARS = 70
 MAX_ZOOMS = 3
+MAX_NARRATION_LINES = 4
+MAX_NARRATION_CHARS = 160
+MUSIC_MOODS = ("énergique", "calme", "épique", "drôle", "tendu", "mystérieux")
 
 LANG_NAMES = {
     "fr": "français",
@@ -39,6 +42,11 @@ class ZoomMoment(BaseModel):
     reason: str
 
 
+class NarrationLine(BaseModel):
+    t: float  # instant souhaité, secondes depuis le début du short
+    text: str
+
+
 class EditorialPlan(BaseModel):
     hook_text: str
     hook_kind: Literal["quote", "original"]
@@ -47,6 +55,11 @@ class EditorialPlan(BaseModel):
     keywords: list[str]
     zooms: list[ZoomMoment]
     warnings: list[str]
+    # Phase 5 (valeurs par défaut : plans antérieurs et plan de repli sans narration).
+    narration_needed: bool = False
+    narration_reason: str = ""
+    narration: list[NarrationLine] = []
+    music_mood: str = ""
 
 
 class TranslatedSentence(BaseModel):
@@ -93,6 +106,17 @@ def validate_plan(
     for z in plan.zooms:
         if not (z.t >= 0 and z.t + z.duration <= duration and 0.5 <= z.duration <= 4):
             raise ValueError(f"zoom hors de l'extrait ou de durée invalide (t={z.t})")
+    if not plan.narration_needed and plan.narration:
+        plan.narration = []
+    if len(plan.narration) > MAX_NARRATION_LINES:
+        raise ValueError(f"plus de {MAX_NARRATION_LINES} lignes de narration")
+    for line in plan.narration:
+        if not line.text.strip() or len(line.text) > MAX_NARRATION_CHARS:
+            raise ValueError(f"ligne de narration vide ou de plus de {MAX_NARRATION_CHARS} car.")
+        if not 0 <= line.t < duration:
+            raise ValueError(f"ligne de narration hors de l'extrait (t={line.t})")
+    if plan.music_mood and plan.music_mood not in MUSIC_MOODS:
+        plan.music_mood = ""
     return plan
 
 
@@ -121,9 +145,34 @@ def _mmss(t: float) -> str:
 
 
 def editorial_system(
-    language: str, focus: str | None, profile_name: str, cta_hint: str | None
+    language: str,
+    focus: str | None,
+    profile_name: str,
+    cta_hint: str | None,
+    narration: bool = False,
+    music: bool = False,
 ) -> str:
     lang = LANG_NAMES.get(language, language)
+    narration_rule = (
+        f"""
+7. Narration (voix de synthèse ajoutée) : narration_needed = true UNIQUEMENT si une courte \
+narration apporte vraiment quelque chose (contexte indispensable absent, extrait sans parole, \
+enjeu à expliquer). Sinon false, narration vide : une narration inutile dégrade le short. \
+Si true : 1 à {MAX_NARRATION_LINES} lignes en {lang}, {MAX_NARRATION_CHARS} caractères maximum \
+chacune, phrases simples faciles à prononcer, STRICTEMENT factuelles (seulement ce que \
+montrent la transcription et les moments fournis ; aucun chiffre, nom ou événement inventé). \
+t = instant souhaité en secondes depuis le début du short, placé dans un SILENCE de la \
+transcription (jamais par-dessus quelqu'un qui parle). narration_reason explique le choix."""
+        if narration
+        else "\n7. narration_needed = false, narration vide, narration_reason vide."
+    )
+    music_rule = (
+        "\n8. music_mood : ambiance d'une musique de fond discrète adaptée à l'extrait, parmi : "
+        + ", ".join(MUSIC_MOODS)
+        + ". Chaîne vide si aucune musique ne convient (dialogue dense, ambiance déjà forte)."
+        if music
+        else "\n8. music_mood : chaîne vide."
+    )
     cta_rule = (
         f"Utilise exactement cet appel à l'action : « {cta_hint} »."
         if cta_hint
@@ -148,7 +197,7 @@ oralement forts. t en secondes depuis le début du short, durée de 1 à 3 s. Au
 mieux qu'un zoom gratuit.
 5. warnings : limites ou points de vigilance pour le montage (liste vide sinon).
 6. N'invente rien : appuie-toi uniquement sur la transcription, le résumé et les moments \
-fournis."""
+fournis.{narration_rule}{music_rule}"""
 
 
 def editorial_content(

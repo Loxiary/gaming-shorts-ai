@@ -26,6 +26,17 @@ export interface Profile {
   cta_enabled: boolean;
   cta_text: string | null;
   render_encoder: "libx264" | "h264_nvenc";
+  // Audio et facecam (Phase 5). Niveaux en dB.
+  narration_mode: "auto" | "off";
+  narration_voice: string;
+  narration_speed: number;
+  narration_level_db: number;
+  game_level_db: number;
+  music_mode: "library" | "off";
+  music_level_db: number;
+  source_music_mode: "attenuate" | "detect" | "off";
+  source_music_reduction_db: number;
+  facecam_mode: "crop" | "off";
   created_at: string;
   updated_at: string;
 }

@@ -6,6 +6,7 @@ import { formatUsd } from "../../services/analysisApi";
 import { errorMessage } from "../../services/api";
 import { formatBytes, formatDate, formatTimecode } from "../../services/format";
 import { useJob } from "../../services/queries";
+import { RenderAudioView } from "../audio/RenderAudioView";
 import {
   type Render,
   type RiskReport,
@@ -18,6 +19,7 @@ const LEVEL_CLASS: Record<string, string> = {
   modéré: "badge-cancelled",
   modérée: "badge-cancelled",
   élevé: "badge-failed",
+  élevée: "badge-completed",
 };
 
 export function RenderCard({ render: r }: { render: Render }) {
@@ -28,7 +30,7 @@ export function RenderCard({ render: r }: { render: Render }) {
   const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [tab, setTab] = useState<"plan" | "qc" | "risk">("risk");
+  const [tab, setTab] = useState<"plan" | "qc" | "risk" | "audio">("risk");
   const currentStep = job.data?.steps.find((s) => s.status === "running");
 
   return (
@@ -90,6 +92,7 @@ export function RenderCard({ render: r }: { render: Render }) {
             {(
               [
                 ["risk", "Rapport de risques"],
+                ["audio", "Audio et facecam"],
                 ["qc", "Contrôle qualité"],
                 ["plan", "Plan éditorial"],
               ] as const
@@ -164,6 +167,14 @@ export function RenderCard({ render: r }: { render: Render }) {
         )}
 
         {tab === "risk" && r.risk_report && <RiskReportView report={r.risk_report} />}
+        {tab === "audio" && (
+          <RenderAudioView
+            audio={r.audio_report}
+            facecam={r.facecam}
+            credits={r.credits ?? []}
+            previewUrl={r.preview_audio_url}
+          />
+        )}
 
         <div className="job-actions render-actions">
           {r.export_status === "exported" ? (
@@ -310,6 +321,18 @@ function RiskReportView({ report }: { report: RiskReport }) {
               <ul className="warnings">
                 {report.ai_warnings.map((w) => (
                   <li key={w}>⚠ {w}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+        {report.credits && report.credits.length > 0 && (
+          <div>
+            <dt>Crédits à publier</dt>
+            <dd>
+              <ul className="plain">
+                {report.credits.map((c) => (
+                  <li key={c.text}>{c.text}</li>
                 ))}
               </ul>
             </dd>

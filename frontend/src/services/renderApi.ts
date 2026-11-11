@@ -20,11 +20,68 @@ export interface RiskReport {
   transformation: { level: string; added: string[]; missing: string[]; detail: string };
   reused_content: { level: string; detail: string };
   facecam: { status: string; detail: string };
+  credits?: Credit[];
+  audio_notes?: string[];
   ai_warnings: string[];
   qc_warnings: string[];
   recommendations: string[];
   blocking: boolean;
   disclaimer: string;
+}
+
+export interface Credit {
+  kind: "voice" | "music";
+  text: string;
+}
+
+export interface NarrationLine {
+  t: number;
+  duration: number;
+  text: string;
+  moved: boolean;
+}
+
+export interface AudioReport {
+  source_music: {
+    mode: string;
+    status: "disabled" | "unavailable" | "none" | "detected";
+    attenuated: boolean;
+    ratio?: number;
+    mean?: number;
+    reduction_db?: number;
+    residual_ratio?: number;
+    per_second?: number[];
+  };
+  narration: {
+    mode: string;
+    status: string;
+    voice?: string;
+    reason?: string;
+    lines: NarrationLine[];
+    dropped?: string[];
+  };
+  music: {
+    mode: string;
+    status: string;
+    title?: string;
+    artist?: string | null;
+    license?: string;
+    mood?: string | null;
+    level_db?: number;
+  };
+  levels: Record<string, number>;
+  notes: string[];
+}
+
+export interface FacecamResult {
+  mode?: string;
+  status: string;
+  presence?: number;
+  frames_analyzed?: number;
+  crop: number[] | null;
+  crop_side?: string;
+  loss?: number;
+  warning: string | null;
 }
 
 export interface EditorialPlan {
@@ -35,6 +92,10 @@ export interface EditorialPlan {
   keywords: string[];
   zooms: { t: number; duration: number; reason: string }[];
   warnings: string[];
+  narration_needed?: boolean;
+  narration_reason?: string;
+  narration?: { t: number; text: string }[];
+  music_mood?: string;
 }
 
 export interface Render {
@@ -50,7 +111,7 @@ export interface Render {
   profile_name: string;
   plan: EditorialPlan | null;
   plan_engine: string | null;
-  subtitles: { start: number; end: number; text: string }[];
+  subtitles: { start: number; end: number; text: string; karaoke?: boolean }[];
   subtitle_language: string | null;
   subtitles_are_translation: boolean;
   video_url: string | null;
@@ -58,6 +119,10 @@ export interface Render {
   qc: { passed: boolean; checks: QcCheck[]; measures: Record<string, number | null> } | null;
   qc_passed: boolean | null;
   risk_report: RiskReport | null;
+  audio_report?: AudioReport | null;
+  facecam?: FacecamResult | null;
+  credits?: Credit[];
+  preview_audio_url?: string | null;
   export_warnings: string[];
   ready: boolean;
   cost_usd: number;

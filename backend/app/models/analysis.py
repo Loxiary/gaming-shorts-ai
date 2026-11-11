@@ -75,6 +75,41 @@ class EditingProfile(Base):
         String(20), nullable=False, default="libx264", server_default="libx264"
     )
 
+    # --- Audio et facecam (Phase 5). Niveaux en dB.
+    narration_mode: Mapped[str] = mapped_column(  # « auto » : l'IA décide ; « off »
+        String(20), nullable=False, default="auto", server_default="auto"
+    )
+    narration_voice: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="fr_FR-siwis-medium",
+        server_default="fr_FR-siwis-medium",
+    )
+    narration_speed: Mapped[float] = mapped_column(
+        Float, nullable=False, default=1.0, server_default="1.0"
+    )
+    narration_level_db: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    game_level_db: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0"
+    )
+    music_mode: Mapped[str] = mapped_column(  # « library » (bibliothèque locale) ou « off »
+        String(20), nullable=False, default="library", server_default="library"
+    )
+    music_level_db: Mapped[float] = mapped_column(
+        Float, nullable=False, default=-18.0, server_default="-18"
+    )
+    source_music_mode: Mapped[str] = mapped_column(  # « attenuate », « detect » ou « off »
+        String(20), nullable=False, default="attenuate", server_default="attenuate"
+    )
+    source_music_reduction_db: Mapped[float] = mapped_column(
+        Float, nullable=False, default=15.0, server_default="15"
+    )
+    facecam_mode: Mapped[str] = mapped_column(  # « crop » (exclure par recadrage) ou « off »
+        String(20), nullable=False, default="crop", server_default="crop"
+    )
+
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow

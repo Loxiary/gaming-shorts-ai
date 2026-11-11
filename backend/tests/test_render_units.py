@@ -168,7 +168,7 @@ def test_risk_report_is_informative_and_never_blocking() -> None:
     assert unknown["blocking"] is False
     assert unknown["reused_content"]["level"] == "élevé"
     assert unknown["rights"]["verified_by_app"] is False
-    assert unknown["audio_music"]["status"] == "non_analysé"
+    assert unknown["audio_music"]["status"] == "non_analysée"
     assert unknown["transformation"]["level"] == "modérée"
     assert any("Créditez" in r for r in unknown["recommendations"])
     assert "Musique possible" in unknown["ai_warnings"]

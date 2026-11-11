@@ -9,6 +9,7 @@ const NAV = [
   { to: "/file", label: "File d'attente", end: false },
   { to: "/exports", label: "Exports", end: false },
   { to: "/profils", label: "Profils", end: false },
+  { to: "/musique", label: "Musique", end: false },
   { to: "/couts", label: "Coûts API", end: false },
   { to: "/parametres", label: "Paramètres", end: false },
 ];
@@ -64,9 +65,9 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 4.</strong> Import, transcription, détection, montage vertical et export
-            confirmé disponibles. Narration, musique, atténuation de la musique d'origine et facecam
-            ne sont <strong>pas encore implémentés</strong>.
+            <strong>Phase 5.</strong> Import, transcription, détection, montage vertical, audio
+            (musique d'origine atténuée, narration, musique sous licence), facecam et export
+            confirmé disponibles. Rien n'est publié automatiquement : l'export reste votre décision.
           </div>
           <div className="status-pills" aria-live="polite">
             <BackendStatus />

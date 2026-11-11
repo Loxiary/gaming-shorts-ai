@@ -51,7 +51,11 @@ ANALYZE_STEPS = (
 )
 
 RENDER_STEPS = (
-    StepDefinition("creating_editorial_plan", "Plan éditorial (accroche, appel à l'action, zooms)"),
+    StepDefinition(
+        "creating_editorial_plan", "Plan éditorial (accroche, appel à l'action, zooms, narration)"
+    ),
+    StepDefinition("detecting_facecam", "Détection du facecam"),
+    StepDefinition("preparing_audio", "Audio : musique d'origine, narration, musique, mixage"),
     StepDefinition("preparing_subtitles", "Sous-titres (traduction si demandée)"),
     StepDefinition("rendering", "Rendu vertical 1080×1920"),
     StepDefinition("quality_check", "Contrôle qualité du fichier"),
@@ -63,7 +67,8 @@ JOB_KINDS: dict[str, JobKind] = {
         kind="render_clip",
         label="Montage du short",
         description=(
-            "Prépare le plan éditorial, les sous-titres animés, rend le short vertical, "
+            "Prépare le plan éditorial, détecte le facecam, traite l'audio (musique "
+            "d'origine, narration, musique ajoutée), les sous-titres animés, rend le short, "
             "contrôle le fichier produit et établit le rapport de risques. L'export reste "
             "soumis à votre confirmation."
         ),

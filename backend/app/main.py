@@ -10,7 +10,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import routes_analysis, routes_jobs, routes_projects, routes_render, routes_system
+from app.api import (
+    routes_analysis,
+    routes_jobs,
+    routes_music,
+    routes_projects,
+    routes_render,
+    routes_system,
+)
 from app.core.config import APP_NAME, APP_VERSION, Settings, get_settings
 from app.core.errors import AppError, DatabaseNotReadyError
 from app.core.logging import configure_logging
@@ -76,4 +83,5 @@ def create_app(settings: Settings | None = None, *, configure_logs: bool = True)
     app.include_router(routes_jobs.router)
     app.include_router(routes_analysis.router)
     app.include_router(routes_render.router)
+    app.include_router(routes_music.router)
     return app

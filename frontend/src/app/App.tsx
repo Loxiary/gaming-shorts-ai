@@ -3,6 +3,7 @@ import { Link, Route, Routes } from "react-router";
 
 import { Layout } from "../components/Layout";
 import { CostsPage } from "../features/analysis/CostsPage";
+import { MusicPage } from "../features/audio/MusicPage";
 import { ProfilesPage } from "../features/analysis/ProfilesPage";
 import { ExportsPage } from "../features/render/ExportsPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -31,6 +32,7 @@ export function AppRoutes() {
         <Route path="projets/:id" element={<ProjectDetailPage />} />
         <Route path="file" element={<QueuePage />} />
         <Route path="profils" element={<ProfilesPage />} />
+        <Route path="musique" element={<MusicPage />} />
         <Route path="couts" element={<CostsPage />} />
         <Route path="exports" element={<ExportsPage />} />
         <Route path="parametres" element={<SettingsPage />} />

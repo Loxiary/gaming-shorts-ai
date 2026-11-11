@@ -48,6 +48,16 @@ def render_video(render_id: str, session: SessionDep, settings: SettingsDep) -> 
     return FileResponse(svc.video_path(session, settings, render_id), media_type="video/mp4")
 
 
+@router.get("/renders/{render_id}/audio-preview", response_class=FileResponse)
+def render_audio_preview(
+    render_id: str, session: SessionDep, settings: SettingsDep
+) -> FileResponse:
+    """Aperçu du mixage audio (niveau final), disponible avant la fin du rendu vidéo."""
+    return FileResponse(
+        svc.preview_audio_path(session, settings, render_id), media_type="audio/mp4"
+    )
+
+
 @router.post("/renders/{render_id}/confirm-export", response_model=RenderOut)
 def confirm_export(
     render_id: str, data: ExportConfirm, session: SessionDep, settings: SettingsDep

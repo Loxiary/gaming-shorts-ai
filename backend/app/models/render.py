@@ -43,6 +43,11 @@ class ClipRender(Base):
     qc_json: Mapped[str | None] = mapped_column(Text)
     qc_passed: Mapped[bool | None] = mapped_column(Boolean)
     risk_report_json: Mapped[str | None] = mapped_column(Text)
+    # Phase 5 : audio (détection/atténuation de musique, narration, musique ajoutée), facecam.
+    audio_report_json: Mapped[str | None] = mapped_column(Text)
+    facecam_json: Mapped[str | None] = mapped_column(Text)
+    credits_json: Mapped[str | None] = mapped_column(Text)
+    preview_audio_path: Mapped[str | None] = mapped_column(String(500))
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     # Export : uniquement après confirmation explicite de l'utilisateur.

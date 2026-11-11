@@ -54,7 +54,7 @@ def analyze_step(ctx: StepContext) -> dict[str, Any] | None:
 
 
 def render_step(ctx: StepContext) -> dict[str, Any] | None:
-    from app.workers.pipeline.render import RENDER_STEPS
+    from app.workers.pipeline.render_audio import RENDER_STEPS
 
     return RENDER_STEPS[ctx.step_name](ctx)
 

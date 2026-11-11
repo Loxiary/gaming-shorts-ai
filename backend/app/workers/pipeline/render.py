@@ -1,4 +1,6 @@
-"""Étapes du job ``render_clip`` (Phase 4) : plan éditorial, sous-titres, rendu, QC, risques.
+"""Étapes du job ``render_clip`` : plan éditorial, sous-titres, rendu, QC, risques (Phase 4).
+Les étapes facecam et audio (Phase 5) sont dans ``render_audio`` ; l'ordre complet des étapes
+est ``render_audio.RENDER_STEPS``.
 
 Le rendu n'est jamais exporté automatiquement : l'export exige une confirmation explicite
 de l'utilisateur (API /renders/{id}/confirm-export) après lecture des avertissements.
@@ -25,7 +27,7 @@ from app.render import editorial as ed
 from app.render.ffmpeg_render import quality_check, render_short
 from app.render.risk import build_risk_report
 from app.render.style import normalize_subtitle_style
-from app.render.subtitles import build_ass, cues_from_translation, cues_from_words
+from app.render.subtitles import Cue, build_ass, cues_from_translation, cues_from_words
 from app.services import budget
 from app.workers.context import StepContext
 from app.workers.errors import StepError
@@ -175,6 +177,8 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
                     profile.get("editorial_focus"),
                     profile.get("name", ""),
                     profile.get("cta_text"),
+                    narration=profile.get("narration_mode", "auto") == "auto",
+                    music=profile.get("music_mode", "library") == "library",
                 ),
                 content=ed.editorial_content(
                     cand.get("summary"),
@@ -242,6 +246,8 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         sentences, src_lang = _sentences(s, source.id, r.start_seconds, r.end_seconds)
         duration = r.end_seconds - r.start_seconds
         render_id = r.id
+        audio_report = json.loads(r.audio_report_json) if r.audio_report_json else {}
+    narration_lines = audio_report.get("narration", {}).get("lines", [])
     mode = profile.get("subtitle_mode", "source")
     style = normalize_subtitle_style(profile.get("subtitle_style"))
     target = profile.get("output_language", "fr")
@@ -281,6 +287,8 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
                 except budget.BudgetExceeded as exc:
                     notes.append(f"{exc} Sous-titres dans la langue d'origine.")
 
+    if mode != "off":
+        cues = _with_narration(cues, narration_lines, style["max_words"], duration)
     keywords = ed.filter_keywords(plan.keywords, [w for c in cues for (_, _, w) in c.words])
     ass = build_ass(
         cues=cues,
@@ -311,6 +319,28 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
     }
 
 
+def _with_narration(
+    cues: list[Cue], lines: list[dict[str, Any]], max_words: int, duration: float
+) -> list[Cue]:
+    """Sous-titre aussi la narration ajoutée (mots répartis sur la durée de chaque ligne,
+    sans surlignage mot à mot : les timings exacts de la voix de synthèse ne sont pas connus)."""
+    extra: list[Cue] = []
+    for line in lines:
+        words = str(line["text"]).split()
+        if not words:
+            continue
+        t0, d = float(line["t"]), float(line["duration"])
+        step = d / len(words)
+        timed = [(t0 + i * step, t0 + (i + 1) * step, w) for i, w in enumerate(words)]
+        for c in cues_from_words(timed, max_words, min(t0 + d + 0.3, duration)):
+            c.karaoke = False
+            extra.append(c)
+    if not extra:
+        return cues
+    kept = [c for c in cues if not any(c.start < e.end and e.start < c.end for e in extra)]
+    return sorted(kept + extra, key=lambda c: c.start)
+
+
 # --------------------------------------------------------------------------- 3. rendu
 
 
@@ -323,7 +353,10 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         src_path = ctx.settings.resolve_data_path(source.media_path or "")
         info = (source.video_codec, source.width or 1920, source.height or 1080, source.fps)
         start, duration, render_id = r.start_seconds, r.end_seconds - r.start_seconds, r.id
+        facecam = json.loads(r.facecam_json) if r.facecam_json else {}
     workdir = _workdir(ctx, render_id)
+    crop = facecam.get("crop") if facecam.get("status") == "detected" else None
+    audio_file = "audio_mix.wav" if (workdir / "audio_mix.wav").is_file() else None
     if not (workdir / "subtitles.ass").is_file():
         raise StepError("Fichier de sous-titres absent : relancez le montage.")
     out = render_short(
@@ -344,6 +377,8 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         on_progress=ctx.report_progress,
         check_cancel=ctx.check_cancel,
         x264_preset=ctx.settings.render_x264_preset,
+        crop=crop,
+        audio_file=audio_file,
     )
     with ctx.session_factory() as s:
         r = _render(ctx, s)
@@ -402,6 +437,9 @@ def building_risk_report(ctx: StepContext) -> dict[str, Any]:
             subtitles_enabled=bool(r.subtitles_json and json.loads(r.subtitles_json)),
             candidate=json.loads(r.candidate_snapshot_json) if r.candidate_snapshot_json else None,
             qc=json.loads(r.qc_json) if r.qc_json else None,
+            audio=json.loads(r.audio_report_json) if r.audio_report_json else None,
+            facecam=json.loads(r.facecam_json) if r.facecam_json else None,
+            credits=json.loads(r.credits_json) if r.credits_json else [],
         )
         r.risk_report_json = json.dumps(report, ensure_ascii=False)
         s.commit()
@@ -410,12 +448,3 @@ def building_risk_report(ctx: StepContext) -> dict[str, Any]:
         "transformation": report["transformation"]["level"],
         "blocking": False,
     }
-
-
-RENDER_STEPS = {
-    "creating_editorial_plan": creating_editorial_plan,
-    "preparing_subtitles": preparing_subtitles,
-    "rendering": rendering,
-    "quality_check": quality_checking,
-    "building_risk_report": building_risk_report,
-}

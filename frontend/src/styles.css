@@ -1263,3 +1263,50 @@ details.tools[open] > summary {
     width: 100%;
   }
 }
+
+/* --- Phase 5 : audio, musique, facecam */
+.music-list {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.music-track audio,
+.audio-preview audio {
+  width: 100%;
+  max-width: 420px;
+  margin: 0.25rem 0 0.5rem;
+}
+.music-track .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.music-track fieldset.moods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0.75rem 0;
+}
+.audio-preview {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.music-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 28px;
+  max-width: 420px;
+  margin-top: 0.35rem;
+}
+.music-strip span {
+  flex: 1;
+  min-width: 1px;
+  background: var(--border);
+  border-radius: 1px;
+}
+.music-strip span.on {
+  background: var(--accent);
+}

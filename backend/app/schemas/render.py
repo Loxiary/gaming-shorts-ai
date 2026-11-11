@@ -39,6 +39,10 @@ class RenderOut(BaseModel):
     qc: dict[str, Any] | None
     qc_passed: bool | None
     risk_report: dict[str, Any] | None
+    audio_report: dict[str, Any] | None = None
+    facecam: dict[str, Any] | None = None
+    credits: list[dict[str, Any]] = []
+    preview_audio_url: str | None = None
     export_warnings: list[str]
     ready: bool
     cost_usd: float

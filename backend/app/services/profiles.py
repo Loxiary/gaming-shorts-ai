@@ -111,6 +111,16 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         cta_enabled=profile.cta_enabled,
         cta_text=profile.cta_text,
         render_encoder=profile.render_encoder,
+        narration_mode=profile.narration_mode,
+        narration_voice=profile.narration_voice,
+        narration_speed=profile.narration_speed,
+        narration_level_db=profile.narration_level_db,
+        game_level_db=profile.game_level_db,
+        music_mode=profile.music_mode,
+        music_level_db=profile.music_level_db,
+        source_music_mode=profile.source_music_mode,
+        source_music_reduction_db=profile.source_music_reduction_db,
+        facecam_mode=profile.facecam_mode,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -162,6 +172,16 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.cta_enabled = data.cta_enabled
     profile.cta_text = data.cta_text
     profile.render_encoder = data.render_encoder
+    profile.narration_mode = data.narration_mode
+    profile.narration_voice = data.narration_voice
+    profile.narration_speed = data.narration_speed
+    profile.narration_level_db = data.narration_level_db
+    profile.game_level_db = data.game_level_db
+    profile.music_mode = data.music_mode
+    profile.music_level_db = data.music_level_db
+    profile.source_music_mode = data.source_music_mode
+    profile.source_music_reduction_db = data.source_music_reduction_db
+    profile.facecam_mode = data.facecam_mode
 
 
 def _commit(session: Session, profile: EditingProfile, make_default: bool) -> EditingProfile:

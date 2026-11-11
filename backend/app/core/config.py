@@ -13,13 +13,13 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.4.0"
-APP_PHASE = "Phase 4 — montage et export"
+APP_VERSION = "0.5.0"
+APP_PHASE = "Phase 5 — audio et facecam"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 
-DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs", "models")
+DATA_SUBDIRS = ("sources", "temp", "projects", "exports", "logs", "models", "music")
 DB_FILENAME = "gaming_shorts.db"
 
 
