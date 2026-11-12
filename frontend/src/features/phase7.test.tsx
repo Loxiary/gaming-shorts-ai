@@ -95,6 +95,7 @@ describe("Transitions et effets (Phase 7)", () => {
         max_words: 3,
       },
       layout: "blur",
+      jump_zoom: true,
       zoom_intensity: 0.12,
       hook_enabled: true,
       cta_enabled: true,
@@ -124,6 +125,9 @@ describe("Transitions et effets (Phase 7)", () => {
     expect(screen.getByLabelText(/Durée max/)).toHaveAttribute("max", "90");
     await user.click(screen.getByLabelText(/Masquer les mots grossiers/));
     await user.click(screen.getByLabelText(/Facecam « réaction » ronde/));
+    expect(screen.getByLabelText("Disposition")).toHaveValue("blur");
+    await user.selectOptions(screen.getByLabelText("Disposition"), "focus");
+    await user.click(screen.getByLabelText(/Rythme : recadrage franc/));
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => {
       const body = calls.find((c) => c.method === "PUT")?.body as Record<string, unknown>;
@@ -134,6 +138,8 @@ describe("Transitions et effets (Phase 7)", () => {
         effects_mode: "off",
         censor_profanity: false,
         react_overlay: false,
+        layout: "focus",
+        jump_zoom: false,
       });
     });
   });

@@ -31,7 +31,8 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     is_default: false,
     subtitle_mode: "source",
     subtitle_style: { ...DEFAULT_STYLE },
-    layout: "blur",
+    layout: "focus",
+    jump_zoom: true,
     zoom_intensity: 0.12,
     hook_enabled: true,
     cta_enabled: true,
@@ -465,9 +466,18 @@ function MontageSettings({
           value={data.layout}
           onChange={(e) => set("layout", e.target.value as ProfileInput["layout"])}
         >
+          <option value="focus">Gros plan carré qui suit le visage (recommandé)</option>
           <option value="blur">Gameplay entier sur fond flouté</option>
           <option value="fill">Plein cadre (bords du gameplay coupés)</option>
         </select>
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.jump_zoom}
+          onChange={(e) => set("jump_zoom", e.target.checked)}
+        />
+        Rythme : recadrage franc à chaque changement de phrase (toutes les 3,5 s au moins)
       </label>
       <label>
         Intensité des zooms ({Math.round(data.zoom_intensity * 100)} %)

@@ -232,7 +232,7 @@ def test_full_phase5_render(
 
     # Facecam : détecté sur toutes les images, exclu par recadrage du côté droit.
     fc = render["facecam"]
-    assert toolkit.face_calls == 10
+    assert toolkit.face_calls >= 10  # facecam (10 images) + suivi du cadre « gros plan »
     assert fc["status"] == "detected" and fc["crop_side"] == "droite" and fc["presence"] == 1.0
     probe = FfmpegTool().probe(
         fast_settings.resolve_data_path(f"projects/{pid}/renders/{render['id']}/short.mp4")

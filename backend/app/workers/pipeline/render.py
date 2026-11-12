@@ -33,6 +33,8 @@ from app.services import budget
 from app.workers.context import StepContext
 from app.workers.errors import StepError
 
+SENTENCE_GAP = 1.0  # silence (s) qui termine une phrase même sans ponctuation
+
 
 def _render(ctx: StepContext, s: Session) -> ClipRender:
     r = s.scalar(select(ClipRender).where(ClipRender.job_id == ctx.job_id))
@@ -88,6 +90,10 @@ def _sentences(
                 prev = current[-1]
                 current[-1] = (prev[0], item[1], prev[2] + item[2])
             else:
+                if current and item[0] - current[-1][1] > SENTENCE_GAP:
+                    # Long silence sans ponctuation (transcription sans point) : nouvelle phrase.
+                    sentences.append(_sentence(current))
+                    current = []
                 current.append(item)
             if raw.strip().endswith((".", "!", "?", "…")):
                 sentences.append(_sentence(current))
@@ -248,12 +254,17 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
     if note:
         plan.warnings.append(note)
 
+    trim = apply_trim(ctx, plan, sentences, offset, duration) if plan.trim_start > 0 else None
+
     with ctx.session_factory() as s:
         r = _render(ctx, s)
         r.plan_json = plan.model_dump_json()
         r.plan_engine = engine
+        if trim:
+            r.start_seconds, r.end_seconds = trim
         s.commit()
     return {
+        "trim": [round(x, 2) for x in trim] if trim else None,
         "engine": engine,
         "hook": plan.hook_text,
         "cta": plan.cta_text,
@@ -310,6 +321,8 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
                         ]
                         cues = cues_from_translation(sentences, texts, style["max_words"], duration)
                         translated, language = True, target
+                        # Mots-clés choisis dans la traduction (ceux du plan sont en VO).
+                        plan.keywords = list(result.parsed.keywords)
                     else:
                         notes.append(f"Traduction échouée ({result.error}) : langue d'origine.")
                 except budget.BudgetExceeded as exc:
@@ -359,6 +372,67 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         "translated": translated,
         "keywords": keywords,
     }
+
+
+def apply_trim(
+    ctx: StepContext,
+    plan: ed.EditorialPlan,
+    sentences: list[ed.Sentence],
+    start: float,
+    duration: float,
+) -> tuple[float, float] | None:
+    """Ouverture directe : coupe les secondes lentes du début (calé sur un début de phrase),
+    prolonge la fin d'autant (calée sur une fin de phrase), sans sortir de 61–90 s ni de la
+    vidéo. Les temps du plan sont décalés en conséquence. None si rien n'est possible."""
+    from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
+
+    wanted = plan.trim_start
+    starts = [s.start for s in sentences if 0.5 <= s.start <= wanted + 1.0]
+    if not starts:
+        plan.trim_start = 0.0
+        return None
+    trim = min(starts, key=lambda x: abs(x - wanted))
+    with ctx.session_factory() as s:
+        source = _source(ctx, s)
+        total = source.duration_seconds or (start + duration)
+        new_start = start + trim
+        target = min(start + duration + trim, new_start + MAX_CLIP_SECONDS, total)
+        later, _ = _sentences(s, source.id, new_start, min(target + 2.0, total))
+    ends = [new_start + x.end for x in later if new_start + x.end <= target + 1.0]
+    new_end = ends[-1] + 0.3 if ends and ends[-1] - new_start >= MIN_CLIP_SECONDS else target
+    new_end = min(new_end, total, new_start + MAX_CLIP_SECONDS)
+    if new_end - new_start < MIN_CLIP_SECONDS:
+        plan.trim_start = 0.0
+        plan.warnings.append("Début lent non coupé : la vidéo est trop courte pour rallonger.")
+        return None
+    plan.trim_start = round(trim, 2)
+    plan.zooms = [z.model_copy(update={"t": z.t - trim}) for z in plan.zooms if z.t - trim >= 0.3]
+    plan.effects = [
+        e.model_copy(update={"t": e.t - trim}) for e in plan.effects if e.t - trim >= 0.5
+    ]
+    plan.narration = [
+        n.model_copy(update={"t": n.t - trim}) for n in plan.narration if n.t - trim >= 0
+    ]
+    plan.warnings.append(
+        f"Ouverture directe : {trim:.1f} s coupées au début ({plan.trim_reason or 'début lent'}),"
+        f" fin prolongée de {new_end - (start + duration):.1f} s."
+    )
+    return new_start, new_end
+
+
+JUMP_MIN_GAP = 3.5  # secondes minimum entre deux changements de cadre
+JUMP_START = 3.0  # pas de saut pendant l'ouverture (titre lu par la voix)
+
+
+def jump_times(sentence_starts: list[float], duration: float) -> list[float]:
+    """Instants de changement de cadre : débuts de phrase espacés d'au moins JUMP_MIN_GAP."""
+    out: list[float] = []
+    for t in sorted(sentence_starts):
+        if t < JUMP_START or t > duration - 1.0:
+            continue
+        if not out or t - out[-1] >= JUMP_MIN_GAP:
+            out.append(round(t, 3))
+    return out
 
 
 def _react(ctx: StepContext, profile: dict[str, Any]) -> dict[str, Any] | None:
@@ -432,6 +506,11 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
     crop = facecam.get("crop") if facecam.get("status") == "detected" else None
     audio_file = "audio_mix.wav" if (workdir / "audio_mix.wav").is_file() else None
     react = _react(ctx, profile)
+    jumps: list[float] = []
+    if profile.get("jump_zoom", True):
+        with ctx.session_factory() as s:
+            sentences, _ = _sentences(s, _source(ctx, s).id, start, start + duration)
+        jumps = jump_times([x.start for x in sentences], duration)
     if profile.get("react_overlay", True) and react is None:
         with ctx.session_factory() as s:
             r = _render(ctx, s)
@@ -466,6 +545,8 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         transition_in=profile.get("transition_in", "none"),
         transition_out=profile.get("transition_out", "none"),
         react=react,
+        focus=[(float(t), float(x)) for t, x in facecam.get("focus") or []],
+        jumps=jumps,
     )
     with ctx.session_factory() as s:
         r = _render(ctx, s)

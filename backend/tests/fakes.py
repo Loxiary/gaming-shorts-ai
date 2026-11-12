@@ -288,6 +288,7 @@ class FakeEditor:
         self.systems: list[str] = []
         self.hook_kind = hook_kind
         self.hook_text = "Une partie qui démarre fort"
+        self.trim_start = 0.0
         self.narration = narration or []
         self.music_mood = music_mood
         self.effects = effects or []
@@ -339,6 +340,8 @@ class FakeEditor:
                     ed.EffectMoment(t=t, kind=k, duration=d, reason="test")  # type: ignore[arg-type]
                     for t, k, d in self.effects
                 ],
+                trim_start=self.trim_start,
+                trim_reason="Salutations (test)." if self.trim_start else "",
                 music_suggestion=ed.MusicSuggestion(
                     mood="tendu",
                     genre="trap",

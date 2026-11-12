@@ -111,6 +111,8 @@ def detecting_facecam(ctx: StepContext) -> dict[str, Any]:
         if result["status"] == "detected" and not result.get("crop"):
             result["status"] = "detected_not_cropped"
     result["mode"] = mode
+    if profile.get("layout") == "focus":
+        result["focus"] = _focus_track(ctx, src_path, start, end, render_id, tk, result)
     with ctx.session_factory() as s:
         r = _render(ctx, s)
         r.facecam_json = json.dumps(result, ensure_ascii=False)
@@ -121,6 +123,36 @@ def detecting_facecam(ctx: StepContext) -> dict[str, Any]:
         "loss": result.get("loss"),
         "presence": result.get("presence"),
     }
+
+
+def _focus_track(  # type: ignore[no-untyped-def]
+    ctx: StepContext, src_path: Path, start: float, end: float, render_id: str, tk, fc: dict
+) -> list[list[float]]:
+    """Disposition « gros plan » : trajectoire du cadre qui suit le visage à l'écran."""
+    if tk is None or not tk.has("yunet"):
+        return []
+    import cv2
+
+    from app.render.focus import SAMPLE_EVERY, focus_track
+
+    video = _frame_source(ctx, src_path)
+    frames_dir = _workdir(ctx, render_id) / "focus"
+    samples: list[tuple[float, list[Face]]] = []
+    n = max(2, int((end - start) / SAMPLE_EVERY))
+    for i in range(n):
+        ctx.check_cancel()
+        rel = (end - start) * (i + 0.5) / n
+        dst = frames_dir / f"{i:03d}.jpg"
+        try:
+            ctx.adapters.media.extract_frame(video, start + rel, dst, 640)
+        except Exception:  # noqa: BLE001 - image manquante : la position précédente est gardée
+            continue
+        img = cv2.imread(str(dst))
+        if img is not None:
+            samples.append((rel, tk.detect_faces(img) or []))
+        ctx.report_progress((i + 1) / n, f"Cadrage sur les visages ({i + 1}/{n})")
+    exclude = fc.get("cam_box") if fc.get("status") in ("detected", "uncertain") else None
+    return [[t, x] for t, x in focus_track(samples, exclude)]
 
 
 # --------------------------------------------------------------------------- audio

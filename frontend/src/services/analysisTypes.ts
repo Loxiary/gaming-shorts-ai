@@ -20,7 +20,8 @@ export interface Profile {
   is_default: boolean;
   subtitle_mode: "source" | "translate" | "off";
   subtitle_style: SubtitleStyle;
-  layout: "blur" | "fill";
+  layout: "focus" | "blur" | "fill";
+  jump_zoom: boolean;
   zoom_intensity: number;
   hook_enabled: boolean;
   cta_enabled: boolean;

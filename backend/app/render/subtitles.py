@@ -21,6 +21,7 @@ HOOK_SECONDS = 3.0
 CTA_SECONDS = 4.0
 MAX_GAP = 0.6  # silence au-delà duquel un groupe se termine
 MAX_CHARS = 24
+POP = "{\\fscx118\\fscy118\\t(0,140,\\fscx100\\fscy100)}"  # apparition d'un groupe
 
 
 @dataclass
@@ -97,13 +98,18 @@ def cues_from_translation(
                 groups[-1].append(tok)
             else:
                 groups.append([tok])
+        # Pas de minutage mot à mot en traduction : chaque mot reçoit une part de la durée de
+        # la phrase d'origine proportionnelle à sa longueur (surlignage animé quand même).
         span = max(sentence.end - sentence.start, 0.3)
-        total = sum(len(" ".join(g)) for g in groups) or 1
+        total = sum(len(w) + 1 for g in groups for w in g) or 1
         t = sentence.start
         for g in groups:
-            d = span * len(" ".join(g)) / total
-            cues.append(Cue(t, min(t + d, duration), [(t, t + d, w) for w in g], karaoke=False))
-            t += d
+            words = []
+            for w in g:
+                d = span * (len(w) + 1) / total
+                words.append((t, min(t + d, duration), w))
+                t += d
+            cues.append(Cue(words[0][0], min(words[-1][1], duration), words, karaoke=True))
     return [c for c in cues if c.end > c.start and c.start < duration]
 
 
@@ -146,7 +152,7 @@ def build_ass(
     kw = ass_inline_color(style["keyword_color"])
     base = ass_inline_color(style["text_color"])
     keyset = {normalize_word(k) for k in keywords}
-    sub_margin = 520 if layout == "blur" else 380
+    sub_margin = 520 if layout == "blur" else 380  # gros plan : sur le bas du gameplay
     cta_margin = 200 if layout == "blur" else 140  # en bas, sous les sous-titres
     accent_box = ass_color("#7C5CFF")  # fond de l'accroche
     cta_box = ass_color("#000000", alpha=0x30)
@@ -183,14 +189,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 for j, (_, _, w) in enumerate(cue.words):
                     color = hi if j == i else kw if normalize_word(w) in keyset else base
                     parts.append(f"{{\\c{color}}}{word_text(w)}")
-                lines.append(f"Dialogue: 0,{_ts(start)},{_ts(end)},Sub,,0,0,0,,{' '.join(parts)}")
+                pop = POP if i == 0 else ""
+                lines.append(
+                    f"Dialogue: 0,{_ts(start)},{_ts(end)},Sub,,0,0,0,,{pop}{' '.join(parts)}"
+                )
         else:
             parts = [
                 f"{{\\c{kw if normalize_word(w) in keyset else base}}}{word_text(w)}"
                 for _, _, w in cue.words
             ]
             lines.append(
-                f"Dialogue: 0,{_ts(cue.start)},{_ts(cue.end)},Sub,,0,0,0,,{' '.join(parts)}"
+                f"Dialogue: 0,{_ts(cue.start)},{_ts(cue.end)},Sub,,0,0,0,,{POP}{' '.join(parts)}"
             )
 
     if hook:

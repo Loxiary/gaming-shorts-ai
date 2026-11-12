@@ -36,6 +36,7 @@ const profile: Profile = {
     max_words: 3,
   },
   layout: "blur",
+  jump_zoom: true,
   zoom_intensity: 0.12,
   hook_enabled: true,
   cta_enabled: true,

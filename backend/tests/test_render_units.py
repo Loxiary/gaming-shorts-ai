@@ -56,7 +56,7 @@ def test_translation_cues_follow_sentence_timing() -> None:
     cues = cues_from_translation(
         sentences, ["Careful, he's coming now!", "We won 3000 dollars."], max_words=3, duration=70
     )
-    assert cues[0].start == pytest.approx(0.5) and not cues[0].karaoke
+    assert cues[0].start == pytest.approx(0.5) and cues[0].karaoke  # animé mot à mot
     first_sentence = [c for c in cues if c.start < 3]
     assert first_sentence[-1].end == pytest.approx(2.2)
 

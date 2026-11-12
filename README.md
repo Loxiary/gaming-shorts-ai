@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 9 — facecam « réaction ».** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 10 — rétention.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–90 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -176,6 +176,20 @@ Réglages décidés avec l'utilisateur le 11/11/2026 :
   YouTube Shorts, ton décontracté gaming, contexte de la scène, question aux spectateurs, 3 à 5
   hashtags. **Les crédits obligatoires sont ajoutés par le code** (source, voix CC BY, musique
   incrustée) : jamais oubliés ni inventés.
+
+### Rétention (Phase 10)
+
+- **Gros plan** (disposition par défaut) : gameplay recadré en carré 1080×1080 (56 % de
+  l'écran au lieu de 32 %), qui **suit le visage** du personnage à l'écran (YuNet sur une image
+  toutes les 1,5 s, trajectoire lissée, panoramique limité à 8 % de largeur par seconde).
+  Les dispositions « fond flouté » et « plein cadre » restent disponibles par profil.
+- **Sous-titres traduits animés** : surlignage mot à mot (minutage au prorata de la longueur
+  des mots), mots-clés choisis dans la traduction, effet « pop » à l'apparition de chaque groupe.
+- **Rythme** : recadrage franc qui alterne à chaque changement de phrase (toutes les 3,5 s au
+  moins, désactivable par profil) et léger zoom continu.
+- **Ouverture directe** : l'IA peut couper jusqu'à 15 s lentes au début (salutations, trajet),
+  calées sur un début de phrase ; la fin est prolongée d'autant jusqu'à une fin de phrase, dans
+  la limite de 61–90 s. Décision laissée à l'IA, qui peut juger que le début accroche déjà.
 
 ### Facecam « réaction » (Phase 9)
 

@@ -17,6 +17,7 @@ from app.adapters.media.ffmpeg import FfmpegTool, _tool
 from app.adapters.types import CancelCheck, ProgressCallback
 from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
 from app.render.editorial import EffectMoment, ZoomMoment
+from app.render.focus import center_expression
 from app.workers.errors import StepError
 
 OUT_W, OUT_H = 1080, 1920
@@ -33,7 +34,17 @@ SHAKE_MARGIN = 1.04  # agrandissement qui donne la marge nécessaire au tremblem
 FLASH_BRIGHTNESS = 0.6
 
 
-def zoom_expression(zooms: list[ZoomMoment], intensity: float, intro_zoom: bool = False) -> str:
+JUMP_ZOOM = 0.12  # zoom franc qui alterne à chaque changement de phrase (rythme)
+PUSH_IN = 0.04  # léger zoom continu sur toute la durée
+
+
+def zoom_expression(
+    zooms: list[ZoomMoment],
+    intensity: float,
+    intro_zoom: bool = False,
+    jumps: list[float] | None = None,
+    duration: float = 0.0,
+) -> str:
     """Facteur d'agrandissement en fonction de t : bosse sinusoïdale par zoom, plus la
     transition d'entrée éventuelle (zoom arrière rapide au début)."""
     terms = []
@@ -45,6 +56,18 @@ def zoom_expression(zooms: list[ZoomMoment], intensity: float, intro_zoom: bool 
         terms.append(f"{intensity:.3f}*({'+'.join(bumps)})")
     if intro_zoom:
         terms.append(f"{INTRO_ZOOM}*pow(max(0,1-t/{INTRO_SECONDS}),2)")
+    if jumps:
+        # Un plan sur deux est resserré : changement de cadre franc, comme une coupe.
+        bounds = [*sorted(jumps), duration if duration > 0 else 1e6]
+        held = [
+            f"between(t,{a:.3f},{b:.3f}-0.001)"
+            for i, (a, b) in enumerate(zip(bounds, bounds[1:], strict=False))
+            if i % 2 == 0
+        ]
+        if held:
+            terms.append(f"{JUMP_ZOOM}*({'+'.join(held)})")
+    if duration > 0:
+        terms.append(f"{PUSH_IN}*t/{duration:.3f}")
     return "1+" + "+".join(terms) if terms else "1"
 
 
@@ -89,6 +112,8 @@ REACT_RING_COLOR = "0xFFD000"
 REACT_MARGIN_X = 40  # depuis le bord DROIT
 REACT_MIN_TOP = 420  # toujours sous le titre (2 lignes au plus en haut de l'écran)
 FILL_REF_TOP = 656  # plein cadre : même hauteur qu'un gameplay 16:9 sur fond flouté
+FOCUS_SIZE = 1080  # disposition « gros plan » : gameplay carré 1080×1080 (56 % de l'écran)
+FOCUS_TOP = 560  # sous le titre ; la facecam réaction chevauche son bord supérieur
 
 
 def react_graph(*, index: int, fps: float, cx: float, cy: float, zoom: float, diameter: int) -> str:
@@ -128,6 +153,7 @@ def filter_graph(
     audio_input: int = 0,
     effects: str = "",
     react: str = "",
+    focus: str = "0.5",
 ) -> str:
     """``crop`` : (x, y, w, h) normalisés appliqués à la source (exclusion du facecam).
     ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée.
@@ -144,7 +170,21 @@ def filter_graph(
         )
         src_w, src_h = max(int(src_w * cw), 2), max(int(src_h * ch), 2)
     gameplay_top = FILL_REF_TOP
-    if layout == "fill":
+    if layout == "focus":
+        # Carré découpé dans le gameplay, centré sur ``focus`` (expression de t, 0–1).
+        side = "min(iw,ih)"
+        video = (
+            f"[0:v]{pre},split=2[bg][fg];"
+            f"[bg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
+            f"gblur=sigma=28,eq=brightness=-0.08[bgb];"
+            f"[fg]crop=w='{side}':h='{side}':x='max(0,min(iw-{side},iw*({focus})-{side}/2))'"
+            f":y='(ih-{side})/2',scale={FOCUS_SIZE}:{FOCUS_SIZE},"
+            f"scale=w='trunc({FOCUS_SIZE}*{z}/2)*2':h=-2:eval=frame,"
+            f"crop={FOCUS_SIZE}:{FOCUS_SIZE}[fgz];"
+            f"[bgb][fgz]overlay=x=0:y={FOCUS_TOP}"
+        )
+        gameplay_top = FOCUS_TOP
+    elif layout == "fill":
         video = (
             f"[0:v]{pre},scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
             f"scale=w='trunc(iw*{z}/2)*2':h=-2:eval=frame,crop={OUT_W}:{OUT_H}"
@@ -201,6 +241,8 @@ def render_short(
     transition_in: str = "none",
     transition_out: str = "none",
     react: dict[str, Any] | None = None,
+    focus: list[tuple[float, float]] | None = None,
+    jumps: list[float] | None = None,
 ) -> Path:
     """``react`` : facecam réaction (path absolu, cx, cy, zoom, diameter) ou None."""
     """``audio_file`` : piste mixée (relative au dossier de travail) remplaçant l'audio source."""
@@ -210,7 +252,14 @@ def render_short(
         src_w=src_w,
         src_h=src_h,
         fps=fps,
-        zoom=zoom_expression(zooms, zoom_intensity, intro_zoom=transition_in == "zoom"),
+        zoom=zoom_expression(
+            zooms,
+            zoom_intensity,
+            intro_zoom=transition_in == "zoom",
+            jumps=jumps or [],
+            duration=duration,
+        ),
+        focus=center_expression(focus or []),
         ass_file=ass_name,
         duration=duration,
         crop=crop,

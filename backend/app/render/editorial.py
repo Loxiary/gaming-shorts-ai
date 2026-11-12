@@ -23,6 +23,7 @@ MAX_NARRATION_LINES = 4
 MAX_NARRATION_CHARS = 160
 MUSIC_MOODS = ("énergique", "calme", "épique", "drôle", "tendu", "mystérieux")
 MAX_EFFECTS = 4
+MAX_TRIM_START = 15.0  # secondes lentes coupables au début (ouverture directe)
 EFFECT_SPACING = 2.5  # secondes minimum entre deux effets (pas de surcharge)
 EFFECT_DURATIONS = {"flash": (0.1, 0.5), "shake": (0.3, 1.0)}
 
@@ -95,6 +96,9 @@ class EditorialPlan(BaseModel):
     # Phase 8 : musique conseillée pour l'upload, textes de publication.
     music_suggestion: MusicSuggestion | None = None
     publication: Publication | None = None
+    # Phase 10 : secondes lentes à couper au début (la fin est prolongée d'autant).
+    trim_start: float = 0.0
+    trim_reason: str = ""
 
 
 class TranslatedSentence(BaseModel):
@@ -104,6 +108,7 @@ class TranslatedSentence(BaseModel):
 
 class Translation(BaseModel):
     sentences: list[TranslatedSentence]
+    keywords: list[str] = []  # mots de la TRADUCTION à mettre en couleur
 
 
 # --------------------------------------------------------------------------- données
@@ -156,6 +161,7 @@ def validate_plan(
     plan.warnings += dropped
     if plan.publication is not None:
         plan.publication = clean_publication(plan.publication)
+    plan.trim_start = min(max(plan.trim_start, 0.0), MAX_TRIM_START)
     return plan
 
 
@@ -311,7 +317,18 @@ de {MAX_YOUTUBE_TITLE} caractères maximum, aguicheur mais honnête), hashtags (
         else "Propose un appel à l'action court : une question à la communauté liée au contenu "
         "réel de l'extrait, ou une invitation à s'abonner."
     )
-    rules = narration_rule + music_rule + effects_rule + suggest_rule + publication_rule
+    trim_rule = f"""
+12. trim_start : les 2 premières secondes décident si le spectateur reste. Si l'extrait \
+commence lentement (salutations, marche, attente, menu) et que l'action ou la réplique forte \
+arrive plus tard, donne le nombre de secondes à couper au début (0 à {MAX_TRIM_START:g}), \
+exactement au début d'une phrase de la transcription ; 0 si le début accroche déjà. \
+Des salutations, retrouvailles, politesses, déplacements ou trajets ne sont JAMAIS une \
+accroche : si l'extrait commence ainsi, coupe jusqu'à la première réplique ou action forte \
+(annonce, provocation, dispute, révélation, explosion), même si elle arrive vers 10 s. \
+trim_reason : une phrase. La fin sera prolongée d'autant par le code (tu n'as rien à faire). \
+Tous tes autres temps (zooms, effets, narration) restent comptés depuis le début de l'extrait \
+fourni."""
+    rules = narration_rule + music_rule + effects_rule + suggest_rule + publication_rule + trim_rule
     return f"""Tu prépares le montage d'un short vertical (TikTok, YouTube Shorts) à partir \
 d'un extrait de vidéo de jeu déjà sélectionné. Profil : {profile_name}. Angle : \
 {focus or "moments forts compréhensibles sans contexte"}.
@@ -379,7 +396,9 @@ def translation_system(source_language: str | None, target: str) -> str:
         f"vers le {LANG_NAMES.get(target, target)}. Traduis chaque phrase fidèlement, dans un "
         "registre oral naturel et concis adapté aux sous-titres. N'ajoute, ne retire et ne "
         "commente rien ; garde les noms propres, chiffres et termes de jeu tels quels si "
-        "l'usage le veut. Renvoie exactement une traduction par index fourni."
+        "l'usage le veut. Renvoie exactement une traduction par index fourni. keywords : 3 à "
+        "10 mots isolés de TA traduction à mettre en couleur (chiffres, noms, mots porteurs "
+        "d'émotion), écrits exactement comme dans ta traduction ; jamais de mot grossier."
     )
 
 

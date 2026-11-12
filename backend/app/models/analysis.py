@@ -61,8 +61,14 @@ class EditingProfile(Base):
         String(20), nullable=False, default="source", server_default="source"
     )
     subtitle_style_json: Mapped[str | None] = mapped_column(Text)
-    layout: Mapped[str] = mapped_column(  # « blur » (fond flouté) ou « fill » (plein cadre)
-        String(20), nullable=False, default="blur", server_default="blur"
+    # « focus » (gros plan carré qui suit le visage), « blur » (gameplay entier sur fond
+    # flouté) ou « fill » (plein cadre).
+    layout: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="focus", server_default="focus"
+    )
+    # Rythme : zoom franc qui alterne à chaque changement de phrase.
+    jump_zoom: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
     )
     zoom_intensity: Mapped[float] = mapped_column(
         Float, nullable=False, default=0.12, server_default="0.12"

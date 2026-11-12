@@ -34,7 +34,8 @@ class ProfileIn(BaseModel):
     # --- Montage (Phase 4)
     subtitle_mode: Literal["source", "translate", "off"] = "source"
     subtitle_style: dict[str, Any] = Field(default_factory=dict)
-    layout: Literal["blur", "fill"] = "blur"
+    layout: Literal["focus", "blur", "fill"] = "focus"
+    jump_zoom: bool = True
     zoom_intensity: float = Field(default=0.12, ge=0, le=0.5)
     hook_enabled: bool = True
     cta_enabled: bool = True
@@ -133,6 +134,7 @@ class ProfileOut(BaseModel):
     subtitle_mode: str
     subtitle_style: dict[str, Any]
     layout: str
+    jump_zoom: bool
     zoom_intensity: float
     hook_enabled: bool
     cta_enabled: bool
