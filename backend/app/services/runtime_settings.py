@@ -89,6 +89,31 @@ FIELDS: tuple[RuntimeField, ...] = (
         ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"),
     ),
     RuntimeField(
+        "react_center_x",
+        "Facecam réaction : centre horizontal (0–1)",
+        "Facecam réaction",
+        "Position du visage dans la vidéo réaction (0 = bord gauche, 1 = bord droit).",
+    ),
+    RuntimeField(
+        "react_center_y",
+        "Facecam réaction : centre vertical (0–1)",
+        "Facecam réaction",
+        "Position du visage dans la vidéo réaction (0 = haut, 1 = bas).",
+    ),
+    RuntimeField(
+        "react_zoom",
+        "Facecam réaction : cadrage (0,2–1)",
+        "Facecam réaction",
+        "Taille du carré découpé autour du visage, en fraction de la hauteur (plus petit = "
+        "visage plus gros).",
+    ),
+    RuntimeField(
+        "react_diameter",
+        "Facecam réaction : diamètre (px)",
+        "Facecam réaction",
+        "Taille du cercle dans le short 1080×1920 (160 à 600).",
+    ),
+    RuntimeField(
         "retention_temp_days",
         "Fichiers intermédiaires (jours)",
         "Stockage",

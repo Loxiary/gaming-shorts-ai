@@ -123,6 +123,7 @@ describe("Transitions et effets (Phase 7)", () => {
     await user.selectOptions(screen.getByLabelText("Effets (flash, tremblement)"), "off");
     expect(screen.getByLabelText(/Durée max/)).toHaveAttribute("max", "90");
     await user.click(screen.getByLabelText(/Masquer les mots grossiers/));
+    await user.click(screen.getByLabelText(/Facecam « réaction » ronde/));
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => {
       const body = calls.find((c) => c.method === "PUT")?.body as Record<string, unknown>;
@@ -132,6 +133,7 @@ describe("Transitions et effets (Phase 7)", () => {
         sfx_mode: "off",
         effects_mode: "off",
         censor_profanity: false,
+        react_overlay: false,
       });
     });
   });

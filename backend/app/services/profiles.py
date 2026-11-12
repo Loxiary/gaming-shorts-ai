@@ -124,6 +124,7 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         censor_profanity=profile.censor_profanity,
         min_confidence=profile.min_confidence,
         narration_title=profile.narration_title,
+        react_overlay=profile.react_overlay,
         bleep_profanity=profile.bleep_profanity,
         effects_mode=profile.effects_mode,
         transition_in=profile.transition_in,
@@ -194,6 +195,7 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.censor_profanity = data.censor_profanity
     profile.min_confidence = data.min_confidence
     profile.narration_title = data.narration_title
+    profile.react_overlay = data.react_overlay
     profile.bleep_profanity = data.bleep_profanity
     profile.effects_mode = data.effects_mode
     profile.transition_in = data.transition_in

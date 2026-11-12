@@ -40,6 +40,7 @@ export interface Profile {
   censor_profanity: boolean;
   bleep_profanity: boolean;
   narration_title: boolean;
+  react_overlay: boolean;
   min_confidence: number;
   // Transitions et effets ponctuels (Phase 7).
   effects_mode: "auto" | "off";

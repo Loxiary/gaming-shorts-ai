@@ -339,6 +339,7 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         cta=plan.cta_text or None,
         duration=duration,
         layout=profile.get("layout", "blur"),
+        react=_react(ctx, profile) is not None,
     )
     (_workdir(ctx, render_id) / "subtitles.ass").write_text(ass, encoding="utf-8")
 
@@ -358,6 +359,26 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         "language": language,
         "translated": translated,
         "keywords": keywords,
+    }
+
+
+def _react(ctx: StepContext, profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Facecam réaction à incruster, si le profil la demande et que la vidéo existe."""
+    if not profile.get("react_overlay", True):
+        return None
+    st = ctx.settings
+    try:
+        path = st.resolve_data_path(st.react_video)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return {
+        "path": path,
+        "cx": st.react_center_x,
+        "cy": st.react_center_y,
+        "zoom": st.react_zoom,
+        "diameter": st.react_diameter,
     }
 
 
@@ -411,6 +432,15 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
     workdir = _workdir(ctx, render_id)
     crop = facecam.get("crop") if facecam.get("status") == "detected" else None
     audio_file = "audio_mix.wav" if (workdir / "audio_mix.wav").is_file() else None
+    react = _react(ctx, profile)
+    if profile.get("react_overlay", True) and react is None:
+        with ctx.session_factory() as s:
+            r = _render(ctx, s)
+            plan.warnings.append(
+                f"Facecam réaction absente ({ctx.settings.react_video}) : short monté sans."
+            )
+            r.plan_json = plan.model_dump_json()
+            s.commit()
     if not (workdir / "subtitles.ass").is_file():
         raise StepError("Fichier de sous-titres absent : relancez le montage.")
     out = render_short(
@@ -436,6 +466,7 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         effects=plan.effects,
         transition_in=profile.get("transition_in", "none"),
         transition_out=profile.get("transition_out", "none"),
+        react=react,
     )
     with ctx.session_factory() as s:
         r = _render(ctx, s)

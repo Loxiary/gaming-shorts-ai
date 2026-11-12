@@ -162,6 +162,15 @@ export function AudioSettings({
           <option value="off">Ne pas détecter</option>
         </select>
       </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.react_overlay}
+          onChange={(e) => set("react_overlay", e.target.checked)}
+        />
+        Facecam « réaction » ronde en bas à gauche (vidéo commune en boucle, sans son ; cadrage dans
+        Paramètres)
+      </label>
     </fieldset>
   );
 }

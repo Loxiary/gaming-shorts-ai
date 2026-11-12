@@ -122,6 +122,10 @@ class EditingProfile(Base):
     bleep_profanity: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
+    # Facecam « réaction » (vidéo commune en boucle) incrustée en bas à gauche.
+    react_overlay: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     # La voix lit le titre au début du short.
     narration_title: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"

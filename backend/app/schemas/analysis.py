@@ -54,6 +54,7 @@ class ProfileIn(BaseModel):
     censor_profanity: bool = True
     bleep_profanity: bool = True
     narration_title: bool = True
+    react_overlay: bool = True
     min_confidence: float = Field(default=0.5, ge=0, le=1)
     # --- Transitions et effets ponctuels (Phase 7)
     effects_mode: Literal["auto", "off"] = "auto"
@@ -150,6 +151,7 @@ class ProfileOut(BaseModel):
     censor_profanity: bool
     bleep_profanity: bool
     narration_title: bool
+    react_overlay: bool
     min_confidence: float
     effects_mode: str
     transition_in: str

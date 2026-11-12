@@ -13,8 +13,8 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.8.0"
-APP_PHASE = "Phase 8 — titre, voix, publication"
+APP_VERSION = "0.9.0"
+APP_PHASE = "Phase 9 — facecam réaction"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     render_x264_preset: str = Field(
         default="faster", pattern="^(ultrafast|superfast|veryfast|faster|fast|medium|slow)$"
     )
+
+    # --- Facecam « réaction » incrustée (Phase 9) : même vidéo pour tous les shorts, en boucle,
+    # sans son, en bas à gauche, dans un cercle à contour jaune. Chemin relatif à data_dir.
+    react_video: str = "facecam/facerig_cam.mp4"
+    react_center_x: float = Field(default=0.43, ge=0, le=1)  # centre du visage (fraction)
+    react_center_y: float = Field(default=0.50, ge=0, le=1)
+    react_zoom: float = Field(default=1.0, ge=0.2, le=1)  # côté du carré / hauteur vidéo
+    react_diameter: int = Field(default=360, ge=160, le=600)  # pixels dans le short 1080×1920
 
     # --- Stockage (Phase 6). Délais en jours, 0 = jamais. Modifiables dans Paramètres.
     retention_temp_days: int = Field(default=7, ge=0, le=3650)

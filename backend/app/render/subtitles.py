@@ -137,6 +137,7 @@ def build_ass(
     cta: str | None,
     duration: float,
     layout: str,
+    react: bool = False,
 ) -> str:
     font = style["font"]
     size = style["size"]
@@ -146,8 +147,10 @@ def build_ass(
     kw = ass_inline_color(style["keyword_color"])
     base = ass_inline_color(style["text_color"])
     keyset = {normalize_word(k) for k in keywords}
-    sub_margin = 520 if layout == "blur" else 380
+    sub_margin = 520 if layout == "blur" or react else 380
     cta_margin = 200 if layout == "blur" else 140  # en bas, sous les sous-titres
+    # Facecam réaction en bas à gauche : l'appel à l'action se décale vers la droite.
+    cta_left = 450 if react else 90
     accent_box = ass_color("#7C5CFF")  # fond de l'accroche
     cta_box = ass_color("#000000", alpha=0x30)
 
@@ -162,7 +165,7 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Sub,{font},{size},{text_c},{text_c},&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,2,70,70,{sub_margin},1
 Style: Hook,{font},{_hook_size(hook or "", 100)},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,18,0,8,60,60,150,1
-Style: Cta,{font},58,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,90,90,{cta_margin},1
+Style: Cta,{font},58,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,{cta_left},60,{cta_margin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 8 — titre, voix, publication.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 9 — facecam « réaction ».** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–90 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -176,6 +176,18 @@ Réglages décidés avec l'utilisateur le 11/11/2026 :
   YouTube Shorts, ton décontracté gaming, contexte de la scène, question aux spectateurs, 3 à 5
   hashtags. **Les crédits obligatoires sont ajoutés par le code** (source, voix CC BY, musique
   incrustée) : jamais oubliés ni inventés.
+
+### Facecam « réaction » (Phase 9)
+
+Une même vidéo (par défaut `GSA_DATA_DIRacecamacerig_cam.mp4`, réglable avec
+`GSA_REACT_VIDEO`) est incrustée dans chaque short pour attirer l'œil : **ronde, contour jaune,
+en bas à gauche**, par-dessus le gameplay et sous les textes (non affectée par le flash ni le
+tremblement). Elle **boucle** si le short est plus long qu'elle ; son éventuelle piste audio est
+ignorée ; ses réactions ne sont pas synchronisées avec le gameplay. Le cadrage sur le visage
+(centre 0,43 / 0,50, carré pleine hauteur) et le diamètre (360 px) se règlent dans
+Paramètres > Réglages globaux > « Facecam réaction » ; l'incrustation s'active par profil.
+L'appel à l'action se décale vers la droite pour ne pas la chevaucher. Si la vidéo est absente,
+le short est monté sans, et c'est signalé dans le plan.
 
 ### Transitions et effets ponctuels (Phase 7)
 

@@ -9,6 +9,7 @@ export const DEFAULT_AUDIO = {
   game_level_db: 0,
   music_mode: "suggest",
   narration_title: true,
+  react_overlay: true,
   bleep_profanity: true,
   music_level_db: -18,
   source_music_mode: "attenuate",

@@ -84,6 +84,36 @@ def effects_chain(
     return ",".join(parts)
 
 
+REACT_RING = 9  # épaisseur du contour jaune (px)
+REACT_RING_COLOR = "0xFFD000"
+REACT_MARGIN_X = 40
+REACT_MARGIN_BOTTOM = 110
+
+
+def react_graph(*, index: int, fps: float, cx: float, cy: float, zoom: float, diameter: int) -> str:
+    """Facecam réaction : carré centré sur le visage, découpé en disque, posé sur un disque
+    jaune un peu plus grand (contour). Sortie : [react], de taille diameter + 2 × anneau."""
+    d = diameter
+    r = d + 2 * REACT_RING
+    side = f"ih*{zoom:.4f}"
+    x = f"max(0,min(iw-{side},iw*{cx:.4f}-{side}/2))"
+    y = f"max(0,min(ih-{side},ih*{cy:.4f}-{side}/2))"
+
+    def disk(size: int, radius: float) -> str:
+        c = size / 2
+        return (
+            "format=yuva420p,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)'"
+            f":a='if(lte(hypot(X-{c:g},Y-{c:g}),{radius:g}),255,0)'"
+        )
+
+    return (
+        f"[{index}:v]fps={fps:g},crop=w='{side}':h='{side}':x='{x}':y='{y}',"
+        f"scale={d}:{d},{disk(d, d / 2 - 1)}[reactface];"
+        f"color=c={REACT_RING_COLOR}:s={r}x{r}:r={fps:g},{disk(r, r / 2 - 1)}[reactring];"
+        f"[reactring][reactface]overlay=x={REACT_RING}:y={REACT_RING}:shortest=1[react]"
+    )
+
+
 def filter_graph(
     *,
     layout: str,
@@ -96,6 +126,7 @@ def filter_graph(
     crop: list[float] | None = None,
     audio_input: int = 0,
     effects: str = "",
+    react: str = "",
 ) -> str:
     """``crop`` : (x, y, w, h) normalisés appliqués à la source (exclusion du facecam).
     ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée.
@@ -127,7 +158,14 @@ def filter_graph(
             f"[bgb][fgz]overlay=x=(W-w)/2:y=(H-h)/2"
         )
     return (
-        f"{video}{',' + effects if effects else ''},ass={ass_file}{fonts},format=yuv420p[v];"
+        f"{video}{',' + effects if effects else ''}"
+        + (
+            f"[base];{react};[base][react]overlay=x={REACT_MARGIN_X}"
+            f":y=H-h-{REACT_MARGIN_BOTTOM}:shortest=1"
+            if react
+            else ""
+        )
+        + f",ass={ass_file}{fonts},format=yuv420p[v];"
         f"[{audio_input}:a]loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,afade=t=in:d=0.3,"
         f"afade=t=out:st={fade_out:.3f}:d=0.3,aresample=48000[a]"
     )
@@ -157,7 +195,9 @@ def render_short(
     effects: list[EffectMoment] | None = None,
     transition_in: str = "none",
     transition_out: str = "none",
+    react: dict[str, Any] | None = None,
 ) -> Path:
+    """``react`` : facecam réaction (path absolu, cx, cy, zoom, diameter) ou None."""
     """``audio_file`` : piste mixée (relative au dossier de travail) remplaçant l'audio source."""
     fps = min(src_fps or 30.0, 60.0)
     graph = filter_graph(
@@ -171,8 +211,22 @@ def render_short(
         crop=crop,
         audio_input=1 if audio_file else 0,
         effects=effects_chain(effects or [], duration, transition_in, transition_out),
+        react=(
+            react_graph(
+                index=2 if audio_file else 1,
+                fps=fps,
+                cx=react["cx"],
+                cy=react["cy"],
+                zoom=react["zoom"],
+                diameter=react["diameter"],
+            )
+            if react
+            else ""
+        ),
     )
     extra_input = ["-i", audio_file] if audio_file else []
+    if react:  # en boucle : couvre toute la durée du short ; son ignoré
+        extra_input += ["-stream_loop", "-1", "-an", "-i", str(react["path"])]
     codec_args = (
         ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0"]
         if encoder == "h264_nvenc"
