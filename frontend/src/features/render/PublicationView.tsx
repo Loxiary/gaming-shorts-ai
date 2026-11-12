@@ -15,6 +15,7 @@ export interface Publication {
   youtube: { title: string; description: string };
   context: string;
   question: string;
+  pinned_comment?: string;
   hashtags: string[];
   credits: string[];
   music_suggestion: MusicSuggestion | null;
@@ -85,6 +86,9 @@ export function PublicationView({ pub }: { pub: Publication }) {
       <CopyField label="TikTok — légende" value={pub.tiktok.caption} multiline />
       <CopyField label="YouTube Shorts — titre" value={pub.youtube.title} />
       <CopyField label="YouTube Shorts — description" value={pub.youtube.description} multiline />
+      {pub.pinned_comment && (
+        <CopyField label="Commentaire à épingler" value={pub.pinned_comment} />
+      )}
       <p className="hint">
         Crédits ajoutés automatiquement ({pub.credits.length}) : obligatoires pour la voix CC BY et
         la source. {pub.censored_words > 0 && `${pub.censored_words} mot(s) grossier(s) masqué(s).`}

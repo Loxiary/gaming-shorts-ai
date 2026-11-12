@@ -267,7 +267,7 @@ def test_backup_contains_db_and_settings_but_no_secret(
     b = client.post("/api/backups")
     assert b.status_code == 201, b.text
     info = b.json()
-    assert info["valid"] and info["counts"]["projects"] == 1 and info["schema_revision"] == "0013"
+    assert info["valid"] and info["counts"]["projects"] == 1 and info["schema_revision"] == "0014"
     assert [x["name"] for x in client.get("/api/backups").json()] == [info["name"]]
 
     resp = client.get(f"/api/backups/{info['name']}")

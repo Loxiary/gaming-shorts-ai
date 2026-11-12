@@ -121,6 +121,25 @@ def _escape(text: str) -> str:
     return text.replace("\\", "/").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
+MID_CTA_SECONDS = 3.5
+REACTION_SECONDS = 1.3
+POP_BIG = "{\\fad(150,0)\\fscx70\\fscy70\\t(0,200,\\fscx100\\fscy100)}"
+REACTION_LABELS = {
+    "fr": {
+        "laugh": "MDR 😂",
+        "shock": "QUOI ?! 😳",
+        "fail": "OH NON 💀",
+        "hype": "ÉPIQUE 🔥",
+        "cringe": "GÊNANT 😬",
+    },
+    "en": {
+        "laugh": "LOL 😂",
+        "shock": "WHAT?! 😳",
+        "fail": "OH NO 💀",
+        "hype": "EPIC 🔥",
+        "cringe": "CRINGE 😬",
+    },
+}
 TITLE_MAX_SIZE = 112
 TITLE_MIN_SIZE = 70
 TITLE_HIGHLIGHT = "#FFD000"
@@ -194,6 +213,9 @@ def build_ass(
     layout: str,
     title_highlight: str = "",
     series: dict[str, int] | None = None,
+    mid_cta: tuple[float, str] | None = None,
+    reactions: list[tuple[float, str]] | None = None,
+    reaction_anchor: tuple[int, int] = (680, 780),
 ) -> str:
     font = style["font"]
     size = style["size"]
@@ -220,7 +242,8 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Sub,{font},{size},{text_c},{text_c},&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,2,70,70,{sub_margin},1
 Style: Hook,{font},{title_size(balance_title(hook or "", title_highlight))},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,18,0,8,60,60,150,1
 Style: Badge,{font},44,&H00101010,&H00101010,{ass_color(TITLE_HIGHLIGHT)},{ass_color(TITLE_HIGHLIGHT)},-1,0,0,0,100,100,0,0,3,10,0,7,40,40,40,1
-Style: Cta,{font},58,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,90,90,{cta_margin},1
+Style: React,{font},84,&H0000D0FF,&H0000D0FF,&H00101010,&H64000000,-1,0,0,0,100,100,0,0,1,7,3,5,10,10,10,1
+Style: Cta,{font},70,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,90,90,{cta_margin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -265,9 +288,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Dialogue: 3,{_ts(0)},{_ts(duration)},Badge,,0,0,0,,"
             f"{_escape(str(label))} {series['index']}/{series['total']}"
         )
+    if mid_cta and mid_cta[1].strip():
+        t0, text = mid_cta
+        lines.append(
+            f"Dialogue: 2,{_ts(t0)},{_ts(min(t0 + MID_CTA_SECONDS, duration))},Cta,,0,0,0,,"
+            f"{POP_BIG}{_escape(text)}"
+        )
+    x, y = reaction_anchor
+    for i, (t0, label) in enumerate(reactions or []):
+        tilt = -12 if i % 2 == 0 else 10  # légère alternance : effet « autocollant »
+        lines.append(
+            f"Dialogue: 4,{_ts(t0)},{_ts(min(t0 + REACTION_SECONDS, duration))},React,,0,0,0,,"
+            f"{{\\an5\\pos({x},{y})\\frz{tilt}\\fscx0\\fscy0"
+            f"\\t(0,120,\\fscx125\\fscy125)\\t(120,220,\\fscx100\\fscy100)"
+            f"\\fad(0,200)}}{_escape(label)}"
+        )
     if cta:
         start = max(duration - CTA_SECONDS, 0.0)
         lines.append(
-            f"Dialogue: 2,{_ts(start)},{_ts(duration)},Cta,,0,0,0,,{{\\fad(250,0)}}{_escape(cta)}"
+            f"Dialogue: 2,{_ts(start)},{_ts(duration)},Cta,,0,0,0,,{POP_BIG}{_escape(cta)}"
         )
     return header + "\n".join(lines) + "\n"

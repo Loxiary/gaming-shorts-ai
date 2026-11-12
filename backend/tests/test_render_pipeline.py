@@ -185,7 +185,7 @@ def test_translation_and_profile_settings(
     assert en["subtitles_are_translation"] is False and en["subtitle_language"] == "en"
     assert fr["subtitles_are_translation"] is True and fr["subtitle_language"] == "fr"
     assert fr["subtitles"][0]["text"].startswith("Phrase")
-    assert editor.calls == ["EditorialPlan", "EditorialPlan", "Translation"]
+    assert editor.calls == ["EditorialPlanLLM", "EditorialPlanLLM", "Translation"]
     assert "en anglais" in editor.systems[0] and "en français" in editor.systems[1]
     # Une seule demande à la fois par public : le doublon est refusé.
     client.post(f"/api/candidates/{cand['id']}/renders", json={})

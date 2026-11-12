@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 11 — fin, progression, séries, titre.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 12 — engagement.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–90 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -190,6 +190,23 @@ Réglages décidés avec l'utilisateur le 11/11/2026 :
 - **Ouverture directe** : l'IA peut couper jusqu'à 15 s lentes au début (salutations, trajet),
   calées sur un début de phrase ; la fin est prolongée d'autant jusqu'à une fin de phrase, dans
   la limite de 61–90 s. Décision laissée à l'IA, qui peut juger que le début accroche déjà.
+
+### Engagement (Phase 12)
+
+- **Rappel en cours de vidéo** : l'IA écrit un court appel au like ou au commentaire
+  (« 👍 si Simeon est le pire boss », 50 caractères au plus), affiché 3,5 s vers 45–70 % de la
+  durée ; l'appel à l'action final est plus gros et animé (désactivables par profil).
+- **Questions à choix** : appel à l'action et question de publication sont des questions
+  fermées qu'on tranche en un mot (« Team Franklin ou Team Lamar ? »). L'onglet Publication
+  propose aussi un **commentaire à épingler** (mini-sondage), avec bouton « Copier ».
+- **Réactions de la facecam** : 0 à 5 étiquettes (MDR 😂, QUOI ?! 😳, OH NON 💀, ÉPIQUE 🔥,
+  GÊNANT 😬 ; LOL, WHAT?!… en anglais) qui surgissent 1,3 s à côté du cercle du panda, inclinées,
+  sur les seuls moments forts choisis par l'IA (4 s d'écart minimum). libass n'affichant pas les
+  émojis en couleur, ils apparaissent en jaune monochrome.
+- **Note technique** : les sorties structurées de l'API refusent un schéma trop complexe
+  (« Schema is too complex » : 24 champs optionnels, 16 unions, et une limite sur la grammaire
+  compilée). Le schéma envoyé à l'IA (`EditorialPlanLLM`) n'a donc aucun champ optionnel ni union
+  (l'IA laisse vides les champs sans objet) ; un test le garantit.
 
 ### Fin, progression, séries et titre (Phase 11)
 

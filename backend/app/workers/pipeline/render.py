@@ -212,14 +212,19 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
                     offset,
                     after,
                 ),
-                schema=ed.EditorialPlan,
+                schema=ed.EditorialPlanLLM,
                 budget_check=_budget(ctx),
                 record=_recorder(ctx, "editorial_plan"),
-                validate=lambda p: ed.validate_plan(p, sentences, duration, hook_enabled) and None,
-                max_tokens=6000,
+                validate=lambda p: (
+                    ed.validate_plan(ed.from_llm(p), sentences, duration, hook_enabled) and None
+                ),
+                max_tokens=8000,
             )
             if result.status == "ok" and result.parsed is not None:
-                plan, engine = result.parsed, "llm"
+                plan = ed.validate_plan(
+                    ed.from_llm(result.parsed), sentences, duration, hook_enabled
+                )
+                engine = "llm"
             else:
                 note = f"Plan IA indisponible ({result.error}) : plan de repli utilisé."
         except budget.BudgetExceeded as exc:
@@ -365,6 +370,17 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         layout=profile.get("layout", "blur"),
         title_highlight=plan.title_highlight,
         series=series_badge(profile),
+        mid_cta=(
+            (plan.mid_cta_t, censor_text(plan.mid_cta_text)[0])
+            if profile.get("mid_cta", True) and plan.mid_cta_text
+            else None
+        ),
+        reactions=(
+            [(r_.t, reaction_label(r_.kind, target)) for r_ in plan.reactions]
+            if profile.get("reactions", True)
+            else None
+        ),
+        reaction_anchor=_reaction_anchor(ctx, profile, source),
     )
     (_workdir(ctx, render_id) / "subtitles.ass").write_text(ass, encoding="utf-8")
 
@@ -426,6 +442,10 @@ def apply_trim(
     plan.narration = [
         n.model_copy(update={"t": n.t - trim}) for n in plan.narration if n.t - trim >= 0
     ]
+    plan.reactions = [
+        r.model_copy(update={"t": r.t - trim}) for r in plan.reactions if r.t - trim >= 1.0
+    ]
+    plan.mid_cta_t = max(plan.mid_cta_t - trim, 0.0)
     plan.warnings.append(
         f"Ouverture directe : {trim:.1f} s coupées au début ({plan.trim_reason or 'début lent'}),"
         f" fin prolongée de {new_end - (start + duration):.1f} s."
@@ -438,6 +458,27 @@ SERIES_CTA = {
     "en": "Follow to watch part {n}! 🔔",
 }
 SERIES_LABEL = {"fr": "PARTIE", "en": "PART"}
+
+
+def reaction_label(kind: str, language: str) -> str:
+    from app.render.subtitles import REACTION_LABELS
+
+    labels = REACTION_LABELS.get(language, REACTION_LABELS["en"])
+    return labels.get(kind, labels["shock"])
+
+
+def _reaction_anchor(ctx: StepContext, profile: dict[str, Any], source: Any) -> tuple[int, int]:
+    """Réaction posée en bas à gauche du cercle de la facecam (qui est en haut à droite)."""
+    from app.render.ffmpeg_render import react_center
+
+    cx, cy = react_center(
+        profile.get("layout", "focus"),
+        source.width or 1920,
+        source.height or 1080,
+        ctx.settings.react_diameter,
+    )
+    off = ctx.settings.react_diameter // 2
+    return cx - off, cy + off
 
 
 def series_badge(profile: dict[str, Any]) -> dict[str, Any] | None:

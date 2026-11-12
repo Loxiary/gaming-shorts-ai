@@ -81,7 +81,12 @@ def build_publication(
         tag = f"({word} {series['index']}/{series['total']})"
         title = f"{title} {tag}"
         tiktok_full = f"{tag} {tiktok_full}"
-    texts = {"tiktok": tiktok_full, "title": title, "description": yt_desc}
+    texts = {
+        "tiktok": tiktok_full,
+        "title": title,
+        "description": yt_desc,
+        "pinned": pub.pinned_comment,
+    }
     censored = 0
     if censor:
         for k, v in texts.items():
@@ -95,6 +100,7 @@ def build_publication(
         "youtube": {"title": texts["title"], "description": texts["description"]},
         "context": pub.context,
         "question": pub.question,
+        "pinned_comment": texts["pinned"],
         "hashtags": hashtags,
         "credits": credit_lines,
         "music_suggestion": (

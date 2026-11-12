@@ -118,6 +118,22 @@ FOCUS_SIZE = 1080  # disposition « gros plan » : gameplay carré 1080×1080 (5
 FOCUS_TOP = 560  # sous le titre ; la facecam réaction chevauche son bord supérieur
 
 
+def gameplay_top(layout: str, src_w: int, src_h: int) -> int:
+    if layout == "focus":
+        return FOCUS_TOP
+    if layout == "fill":
+        return FILL_REF_TOP
+    fg_h = min(int(round(OUT_W * src_h / max(src_w, 1) / 2) * 2), OUT_H)
+    return (OUT_H - fg_h) // 2
+
+
+def react_center(layout: str, src_w: int, src_h: int, diameter: int) -> tuple[int, int]:
+    """Centre du cercle de la facecam réaction dans le short (mêmes règles que le rendu)."""
+    size = diameter + 2 * REACT_RING
+    top = max(REACT_MIN_TOP, gameplay_top(layout, src_w, src_h) - size // 2)
+    return OUT_W - REACT_MARGIN_X - size // 2, top + size // 2
+
+
 def react_graph(*, index: int, fps: float, cx: float, cy: float, zoom: float, diameter: int) -> str:
     """Facecam réaction : carré centré sur le visage, découpé en disque, posé sur un disque
     jaune un peu plus grand (contour). Sortie : [react], de taille diameter + 2 × anneau."""

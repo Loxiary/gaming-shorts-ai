@@ -70,7 +70,10 @@ def test_editorial_prompt_title_music_and_publication() -> None:
     assert "pendant TOUTE la vidéo" in on and "aguicheur" in on
     assert "Ne cite AUCUN titre ni artiste" in on and "3 à 5" in on
     off = ed.editorial_system("fr", None, "P", None)
-    assert "music_suggestion : null" in off and "publication : null" in off
+    assert (
+        "music_suggestion : tous ses champs vides" in off
+        and "publication : tous ses champs vides" in off
+    )
 
 
 def test_publication_adds_credits_cleans_hashtags_and_censors() -> None:

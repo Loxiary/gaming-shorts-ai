@@ -18,6 +18,11 @@ from pydantic import BaseModel
 
 MAX_HOOK_CHARS = 50  # titre permanent en haut de l'écran, 2 lignes au plus
 MAX_CTA_CHARS = 70
+MAX_MID_CTA_CHARS = 50
+MID_CTA_RANGE = (0.45, 0.7)  # rappel à 45–70 % de la durée
+MAX_REACTIONS = 5
+REACTION_SPACING = 4.0
+REACTION_KINDS = ("laugh", "shock", "fail", "hype", "cringe")
 MAX_ZOOMS = 3
 MAX_NARRATION_LINES = 4
 MAX_NARRATION_CHARS = 160
@@ -68,10 +73,16 @@ class Publication(BaseModel):
     """Textes de publication rédigés par l'IA (les crédits sont ajoutés par le code)."""
 
     context: str  # 1 à 2 phrases : ce qui se passe, pour compenser le contexte manquant
-    question: str  # question qui pousse à commenter
+    question: str  # question fermée à choix, facile à commenter
     tiktok_caption: str
     youtube_title: str
     hashtags: list[str]
+    pinned_comment: str = ""  # commentaire du créateur à épingler (sondage, choix)
+
+
+class ReactionMoment(BaseModel):
+    t: float  # secondes depuis le début du short
+    kind: Literal["laugh", "shock", "fail", "hype", "cringe"]
 
 
 class NarrationLine(BaseModel):
@@ -104,6 +115,85 @@ class EditorialPlan(BaseModel):
     extend_end: float = 0.0
     extend_reason: str = ""
     title_highlight: str = ""
+    # Phase 12 : rappel en cours de vidéo, réactions de la facecam.
+    mid_cta_text: str = ""
+    mid_cta_t: float = 0.0
+    reactions: list[ReactionMoment] = []
+
+
+# --------------------------------------------------------------------------- schéma envoyé à l'IA
+# Les sorties structurées refusent les schémas trop complexes (« Schema is too complex » :
+# 24 champs optionnels et 16 unions au plus, plus une limite sur la grammaire compilée). Le
+# schéma envoyé à l'IA n'a donc AUCUN champ optionnel ni union, et ses énumérations sont de
+# simples chaînes vérifiées par le code ; ``from_llm`` le convertit en ``EditorialPlan``.
+
+
+class EffectLLM(BaseModel):
+    t: float
+    kind: str  # flash | shake
+    duration: float
+    reason: str
+
+
+class ReactionLLM(BaseModel):
+    t: float
+    kind: str  # laugh | shock | fail | hype | cringe
+
+
+class MusicLLM(BaseModel):
+    mood: str
+    genre: str
+    tempo: str
+    search_keywords: list[str]
+    why: str
+
+
+class PublicationLLM(BaseModel):
+    context: str
+    question: str
+    pinned_comment: str
+    tiktok_caption: str
+    youtube_title: str
+    hashtags: list[str]
+
+
+class EditorialPlanLLM(BaseModel):
+    hook_text: str
+    hook_kind: Literal["quote", "original"]
+    hook_reason: str
+    title_highlight: str
+    cta_text: str
+    mid_cta_text: str
+    mid_cta_t: float
+    keywords: list[str]
+    zooms: list[ZoomMoment]
+    effects: list[EffectLLM]
+    reactions: list[ReactionLLM]
+    narration_needed: bool
+    narration_reason: str
+    narration: list[NarrationLine]
+    music_mood: str
+    music_suggestion: MusicLLM
+    publication: PublicationLLM
+    trim_start: float
+    trim_reason: str
+    extend_end: float
+    extend_reason: str
+    warnings: list[str]
+
+
+def from_llm(p: BaseModel) -> EditorialPlan:
+    """Plan de l'IA (schéma simplifié) → plan complet ; valeurs inconnues écartées."""
+    d = p.model_dump()
+    d["effects"] = [e for e in d.get("effects") or [] if e.get("kind") in EFFECT_DURATIONS]
+    d["reactions"] = [r for r in d.get("reactions") or [] if r.get("kind") in REACTION_KINDS]
+    music = d.get("music_suggestion")
+    if not music or not str(music.get("mood", "")).strip():
+        d["music_suggestion"] = None
+    pub = d.get("publication")
+    if not pub or not (str(pub.get("youtube_title", "")).strip() or pub.get("tiktok_caption")):
+        d["publication"] = None
+    return EditorialPlan.model_validate(d)
 
 
 class TranslatedSentence(BaseModel):
@@ -168,6 +258,11 @@ def validate_plan(
         plan.publication = clean_publication(plan.publication)
     plan.trim_start = min(max(plan.trim_start, 0.0), MAX_TRIM_START)
     plan.extend_end = min(max(plan.extend_end, 0.0), MAX_EXTEND_END)
+    plan.mid_cta_text = " ".join(plan.mid_cta_text.split())[:MAX_MID_CTA_CHARS]
+    lo, hi = MID_CTA_RANGE
+    plan.mid_cta_t = min(max(plan.mid_cta_t, duration * lo), duration * hi)
+    plan.reactions, dropped_r = filter_reactions(plan.reactions, duration)
+    plan.warnings += dropped_r
     if plan.title_highlight and normalize_text(plan.title_highlight) not in normalize_text(
         plan.hook_text
     ):
@@ -197,12 +292,31 @@ def _cut(text: str, limit: int) -> str:
 def clean_publication(p: Publication) -> Publication:
     """Normalise sans jamais rejeter : longueurs, hashtags (3 à 5, sans espace)."""
     return Publication(
+        pinned_comment=_cut(p.pinned_comment, 150),
         context=_cut(p.context, 300),
         question=_cut(p.question, 150),
         tiktok_caption=_cut(p.tiktok_caption, MAX_TIKTOK_CAPTION),
         youtube_title=_cut(p.youtube_title, MAX_YOUTUBE_TITLE),
         hashtags=clean_hashtags(p.hashtags),
     )
+
+
+def filter_reactions(
+    reactions: list[ReactionMoment], duration: float
+) -> tuple[list[ReactionMoment], list[str]]:
+    """Réactions de la facecam : 5 au plus, espacées de 4 s, dans l'extrait (écarte le reste)."""
+    kept: list[ReactionMoment] = []
+    dropped: list[str] = []
+    for r in sorted(reactions, key=lambda x: x.t):
+        if not 1.0 <= r.t <= duration - 2.0:
+            dropped.append(f"Réaction « {r.kind} » à {r.t:.1f} s écartée (hors de l'extrait).")
+        elif kept and r.t - kept[-1].t < REACTION_SPACING:
+            dropped.append(f"Réaction « {r.kind} » à {r.t:.1f} s écartée (trop rapprochée).")
+        elif len(kept) >= MAX_REACTIONS:
+            dropped.append(f"Réaction « {r.kind} » à {r.t:.1f} s écartée (plus de 5).")
+        else:
+            kept.append(r)
+    return kept, dropped
 
 
 def filter_effects(
@@ -300,19 +414,22 @@ bibliothèque sonore de TikTok ou de YouTube (rien n'est incrusté dans la vidé
 en anglais, qui marchent dans ces bibliothèques, ex. « dark trap », « epic cinematic »), why \
 (une phrase). Ne cite AUCUN titre ni artiste précis : leur disponibilité n'est pas vérifiable."""
         if music_suggest
-        else "\n10. music_suggestion : null."
+        else "\n10. music_suggestion : tous ses champs vides (chaînes et listes vides)."
     )
     publication_rule = (
         f"""
 11. publication, en {lang}, ton décontracté gaming (tutoiement, énergique, quelques émojis), \
 sans aucune promesse mensongère ni mot grossier : context (1 à 2 phrases factuelles qui \
 expliquent la scène à quelqu'un qui n'a pas vu la vidéo complète), question (une question qui \
-pousse à commenter, liée au contenu réel), tiktok_caption (accroche de \
+pousse à commenter : FERMÉE à choix, qu'on tranche en un mot, liée au contenu réel), \
+pinned_comment (commentaire que le créateur épinglera sous la vidéo : un mini-sondage à \
+réponses courtes ou une prise de position qui appelle les réponses, 150 caractères maximum), \
+tiktok_caption (accroche de \
 {MAX_TIKTOK_CAPTION} caractères maximum, sans hashtag), youtube_title (titre YouTube Shorts \
 de {MAX_YOUTUBE_TITLE} caractères maximum, aguicheur mais honnête), hashtags (3 à \
 {MAX_HASHTAGS}, pertinents : jeu, genre, tendance gaming générique ; avec #)."""
         if publication
-        else "\n11. publication : null."
+        else "\n11. publication : tous ses champs vides (chaînes et listes vides)."
     )
     music_rule = (
         "\n8. music_mood : ambiance d'une musique de fond discrète adaptée à l'extrait, parmi : "
@@ -324,8 +441,9 @@ de {MAX_YOUTUBE_TITLE} caractères maximum, aguicheur mais honnête), hashtags (
     cta_rule = (
         f"Utilise exactement cet appel à l'action : « {cta_hint} »."
         if cta_hint
-        else "Propose un appel à l'action court : une question à la communauté liée au contenu "
-        "réel de l'extrait, ou une invitation à s'abonner."
+        else "Propose un appel à l'action court affiché à la fin : une question FERMÉE à choix, "
+        "qu'on peut trancher en un mot dans les commentaires (« Team Franklin ou Team Lamar ? », "
+        "« Il avait raison : oui ou non ? », « 1 ou 2 ? »), liée au contenu réel de l'extrait."
     )
     trim_rule = f"""
 12. trim_start : les 2 premières secondes décident si le spectateur reste. Si l'extrait \
@@ -345,8 +463,19 @@ donne le nombre de secondes à ajouter pour l'inclure (0 à {MAX_EXTEND_END:g}) 
 actuelle conclut déjà. Une fin nette donne envie de revoir le short. extend_reason : une phrase.
 14. title_highlight : le mot ou groupe de mots le plus fort du titre (hook_text), recopié \
 exactement, qui sera affiché en couleur ; chaîne vide si aucun ne se détache."""
+    engage_rule = f"""
+15. mid_cta_text : court rappel affiché brièvement vers le milieu de la vidéo pour pousser au \
+like ou au commentaire, lié au contenu (« 👍 si Simeon est le pire boss »), \
+{MAX_MID_CTA_CHARS} caractères maximum, en {lang} ; mid_cta_t : instant souhaité (secondes \
+depuis le début du short), plutôt entre 45 et 70 % de la durée, hors d'une réplique clé.
+16. reactions : 0 à {MAX_REACTIONS} réactions de la facecam (une petite étiquette « réaction » \
+apparaît à côté), UNIQUEMENT sur des moments réellement drôles, choquants, ratés ou épiques ; \
+kind parmi laugh (drôle), shock (choc, surprise), fail (raté), hype (épique), cringe (gênant) ; \
+t en secondes depuis le début du short, au moins {REACTION_SPACING:g} s d'écart. Aucune \
+réaction vaut mieux qu'une réaction gratuite."""
     rules = (
-        narration_rule
+        engage_rule
+        + narration_rule
         + music_rule
         + effects_rule
         + suggest_rule

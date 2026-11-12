@@ -34,6 +34,8 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     layout: "focus",
     jump_zoom: true,
     progress_bar: true,
+    mid_cta: true,
+    reactions: true,
     zoom_intensity: 0.12,
     hook_enabled: true,
     cta_enabled: true,
@@ -487,6 +489,22 @@ function MontageSettings({
           onChange={(e) => set("progress_bar", e.target.checked)}
         />
         Barre de progression en haut de l'écran
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.mid_cta}
+          onChange={(e) => set("mid_cta", e.target.checked)}
+        />
+        Rappel « like / commente » au milieu de la vidéo
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.reactions}
+          onChange={(e) => set("reactions", e.target.checked)}
+        />
+        Réactions à côté de la facecam sur les moments forts (MDR, QUOI ?!…)
       </label>
       <label>
         Intensité des zooms ({Math.round(data.zoom_intensity * 100)} %)

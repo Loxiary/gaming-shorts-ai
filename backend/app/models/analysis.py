@@ -66,6 +66,11 @@ class EditingProfile(Base):
     layout: Mapped[str] = mapped_column(
         String(20), nullable=False, default="focus", server_default="focus"
     )
+    # Engagement : rappel en cours de vidéo, réactions de la facecam.
+    mid_cta: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    reactions: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     # Barre de progression en haut de l'écran.
     progress_bar: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"

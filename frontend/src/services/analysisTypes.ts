@@ -23,6 +23,8 @@ export interface Profile {
   layout: "focus" | "blur" | "fill";
   jump_zoom: boolean;
   progress_bar: boolean;
+  mid_cta: boolean;
+  reactions: boolean;
   zoom_intensity: number;
   hook_enabled: boolean;
   cta_enabled: boolean;

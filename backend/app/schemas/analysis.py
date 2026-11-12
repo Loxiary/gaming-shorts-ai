@@ -37,6 +37,8 @@ class ProfileIn(BaseModel):
     layout: Literal["focus", "blur", "fill"] = "focus"
     jump_zoom: bool = True
     progress_bar: bool = True
+    mid_cta: bool = True
+    reactions: bool = True
     zoom_intensity: float = Field(default=0.12, ge=0, le=0.5)
     hook_enabled: bool = True
     cta_enabled: bool = True
@@ -137,6 +139,8 @@ class ProfileOut(BaseModel):
     layout: str
     jump_zoom: bool
     progress_bar: bool
+    mid_cta: bool
+    reactions: bool
     zoom_intensity: float
     hook_enabled: bool
     cta_enabled: bool

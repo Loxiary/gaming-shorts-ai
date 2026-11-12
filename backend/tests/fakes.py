@@ -289,6 +289,8 @@ class FakeEditor:
         self.hook_kind = hook_kind
         self.hook_text = "Une partie qui démarre fort"
         self.trim_start = 0.0
+        self.reactions: list[tuple[float, str]] = []
+        self.mid_cta_text = ""
         self.narration = narration or []
         self.music_mood = music_mood
         self.effects = effects or []
@@ -341,6 +343,12 @@ class FakeEditor:
                     for t, k, d in self.effects
                 ],
                 trim_start=self.trim_start,
+                mid_cta_text=self.mid_cta_text,
+                mid_cta_t=30.0,
+                reactions=[
+                    ed.ReactionMoment(t=t, kind=k)  # type: ignore[arg-type]
+                    for t, k in self.reactions
+                ],
                 trim_reason="Salutations (test)." if self.trim_start else "",
                 music_suggestion=ed.MusicSuggestion(
                     mood="tendu",
@@ -355,6 +363,7 @@ class FakeEditor:
                     tiktok_caption="Le début est fou 😳",
                     youtube_title="Une partie qui démarre fort",
                     hashtags=["gta6", "#gaming", "#gaming", "#Shorts game"],
+                    pinned_comment="Team Franklin ou Team Lamar ? 👇",
                 ),
             )
         if validate:
