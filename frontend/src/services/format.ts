@@ -1,4 +1,4 @@
-import type { JobStatus, StepStatus } from "./types";
+import type { JobStatus, RightsStatus, StepStatus } from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
   dateStyle: "short",
@@ -32,9 +32,27 @@ export function formatBytes(bytes: number): string {
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
 }
 
+export function formatTimecode(seconds: number | null | undefined): string {
+  if (seconds == null || Number.isNaN(seconds)) return "—";
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(h ? 2 : 1, "0");
+  return `${h ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
+
+export const RIGHTS_LABELS: Record<RightsStatus, string> = {
+  unknown: "Inconnu / non vérifié",
+  owned: "Je suis le créateur de la vidéo",
+  authorized: "Autorisation obtenue du créateur",
+  licensed: "Licence permettant la réutilisation (ex. Creative Commons)",
+};
+
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   queued: "En attente",
   running: "En cours",
+  paused: "En pause",
   completed: "Terminé",
   failed: "Échec",
   cancelled: "Annulé",

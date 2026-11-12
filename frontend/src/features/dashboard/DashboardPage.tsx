@@ -54,8 +54,8 @@ export function DashboardPage() {
       <h2>Jobs actifs</h2>
       {active.length === 0 ? (
         <EmptyState>
-          Aucun job en attente ou en cours. Créez un projet dans la{" "}
-          <Link to="/projets">bibliothèque</Link> puis lancez un job de démonstration.
+          Aucun job en attente ou en cours. <Link to="/importer">Importez une vidéo</Link> pour
+          lancer un traitement.
         </EmptyState>
       ) : (
         <div className="job-list">

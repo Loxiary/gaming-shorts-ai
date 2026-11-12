@@ -18,7 +18,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.time import utcnow
-from app.models import ACTIVE_JOB_STATUSES, Job, JobStatus, JobStep, StepStatus, WorkerHeartbeat
+from app.models import (
+    ACTIVE_JOB_STATUSES,
+    Job,
+    JobStatus,
+    JobStep,
+    SourceMedia,
+    StepStatus,
+    WorkerHeartbeat,
+)
 from app.schemas.api import JobDetailOut, JobOut, JobStepOut
 from app.services.job_kinds import get_job_kind
 from app.services.projects import get_project
@@ -42,7 +50,11 @@ def get_job(session: Session, job_id: str, *, with_steps: bool = False) -> Job:
 def list_jobs(
     session: Session, *, status: str | None = None, project_id: str | None = None, limit: int = 200
 ) -> list[Job]:
-    stmt = select(Job).options(selectinload(Job.project)).order_by(Job.created_at.desc())
+    stmt = (
+        select(Job)
+        .options(selectinload(Job.project), selectinload(Job.steps))
+        .order_by(Job.created_at.desc())
+    )
     if status:
         stmt = stmt.where(Job.status == status)
     if project_id:
@@ -52,6 +64,9 @@ def list_jobs(
 
 def job_to_out(job: Job) -> JobOut:
     kind = get_job_kind(job.kind)
+    current = None
+    if job.current_step and "steps" in job.__dict__:  # étapes déjà chargées : pas de requête
+        current = next((st for st in job.steps if st.name == job.current_step), None)
     return JobOut(
         id=job.id,
         project_id=job.project_id,
@@ -62,8 +77,11 @@ def job_to_out(job: Job) -> JobOut:
         status=job.status,
         progress=job.progress,
         current_step=job.current_step,
+        current_step_label=current.label if current else None,
+        current_step_detail=current.detail if current else None,
         error_message=job.error_message,
         cancel_requested=job.cancel_requested,
+        pause_requested=job.pause_requested,
         attempts=job.attempts,
         created_at=job.created_at,
         started_at=job.started_at,
@@ -82,13 +100,22 @@ def job_to_detail(job: Job) -> JobDetailOut:
 # --------------------------------------------------------------------------- commandes
 
 
-def enqueue_job(session: Session, project_id: str, kind: str) -> Job:
+def enqueue_job(session: Session, project_id: str, kind: str, *, internal: bool = False) -> Job:
+    """``internal`` : appel par un service qui prépare lui-même les données du job."""
     get_project(session, project_id)
     definition = get_job_kind(kind)
     if definition is None:
         raise AppError(f"Type de job inconnu : {kind}")
+    if kind in {"analyze_clips", "render_clip"} and not internal:
+        raise AppError("Ce type de job se lance depuis la fiche du projet.")
+    if kind == "ingest_youtube":
+        has_source = session.scalar(
+            select(SourceMedia.id).where(SourceMedia.project_id == project_id)
+        )
+        if not has_source:
+            raise AppError("Ce projet n'a pas de source : utilisez la page « Importer ».")
 
-    active = session.scalar(
+    active = kind != "render_clip" and session.scalar(
         select(Job.id).where(
             Job.project_id == project_id, Job.kind == kind, Job.status.in_(ACTIVE_JOB_STATUSES)
         )
@@ -124,8 +151,14 @@ def request_cancel(session: Session, job_id: str) -> Job:
     # Job en attente : annulation immédiate (conditionnelle pour éviter une course avec le worker).
     result = session.execute(
         update(Job)
-        .where(Job.id == job_id, Job.status == JobStatus.QUEUED)
-        .values(status=JobStatus.CANCELLED, finished_at=now, updated_at=now, current_step=None)
+        .where(Job.id == job_id, Job.status.in_((JobStatus.QUEUED, JobStatus.PAUSED)))
+        .values(
+            status=JobStatus.CANCELLED,
+            finished_at=now,
+            updated_at=now,
+            current_step=None,
+            pause_requested=False,
+        )
     )
     if result.rowcount:
         session.execute(
@@ -134,7 +167,7 @@ def request_cancel(session: Session, job_id: str) -> Job:
             .values(status=StepStatus.CANCELLED)
         )
         session.commit()
-        logger.info("Job annulé (en attente)", extra={"job_id": job_id})
+        logger.info("Job annulé (en attente ou en pause)", extra={"job_id": job_id})
         return get_job(session, job_id, with_steps=True)
 
     # Job en cours : annulation sûre à la fin de l'étape courante, par le worker.
@@ -147,6 +180,53 @@ def request_cancel(session: Session, job_id: str) -> Job:
     if not result.rowcount:
         raise ConflictError("Ce job est déjà terminé : il ne peut pas être annulé.")
     logger.info("Annulation demandée (job en cours)", extra={"job_id": job_id})
+    session.expire_all()
+    return get_job(session, job_id, with_steps=True)
+
+
+def request_pause(session: Session, job_id: str) -> Job:
+    """Pause sûre : immédiate pour un job en attente, à la fin de l'étape en cours sinon.
+    Les étapes terminées sont conservées ; la reprise continue à l'étape suivante."""
+    now = utcnow()
+    get_job(session, job_id)
+    result = session.execute(
+        update(Job)
+        .where(Job.id == job_id, Job.status == JobStatus.QUEUED)
+        .values(status=JobStatus.PAUSED, updated_at=now, current_step=None)
+    )
+    if not result.rowcount:
+        result = session.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+            .values(pause_requested=True, updated_at=now)
+        )
+    session.commit()
+    if not result.rowcount:
+        raise ConflictError("Seul un job en attente ou en cours peut être mis en pause.")
+    logger.info("Pause demandée", extra={"job_id": job_id})
+    session.expire_all()
+    return get_job(session, job_id, with_steps=True)
+
+
+def resume_job(session: Session, job_id: str) -> Job:
+    """Remet en file un job en pause (ou annule une demande de pause pas encore appliquée)."""
+    now = utcnow()
+    get_job(session, job_id)
+    result = session.execute(
+        update(Job)
+        .where(Job.id == job_id, Job.status == JobStatus.PAUSED)
+        .values(status=JobStatus.QUEUED, pause_requested=False, updated_at=now)
+    )
+    if not result.rowcount:
+        result = session.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.status == JobStatus.RUNNING, Job.pause_requested)
+            .values(pause_requested=False, updated_at=now)
+        )
+    session.commit()
+    if not result.rowcount:
+        raise ConflictError("Ce job n'est pas en pause.")
+    logger.info("Job repris", extra={"job_id": job_id})
     session.expire_all()
     return get_job(session, job_id, with_steps=True)
 

@@ -6,6 +6,7 @@ interface Props {
   confirmLabel: string;
   danger?: boolean;
   pending?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   confirmLabel,
   danger,
   pending,
+  confirmDisabled,
   onConfirm,
   onCancel,
 }: Props) {
@@ -43,7 +45,7 @@ export function ConfirmDialog({
             type="button"
             className={danger ? "btn btn-danger" : "btn btn-primary"}
             onClick={onConfirm}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
           >
             {pending ? "En cours…" : confirmLabel}
           </button>

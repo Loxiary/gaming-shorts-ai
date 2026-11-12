@@ -6,3 +6,26 @@ sqlalchemy==2.1.8           # ORM / accès SQLite (MIT)
 alembic==1.20.1             # migrations de schéma (MIT)
 pydantic==2.14.3            # validation des schémas (MIT)
 pydantic-settings==2.16.2   # configuration via variables d'environnement / .env (MIT)
+
+# --- Phase 2 : import et transcription
+yt-dlp[default]==2026.10.26 # téléchargement YouTube (Unlicense) ; [default] inclut yt-dlp-ejs (solveur JS local)
+faster-whisper==1.2.1       # transcription locale (MIT) ; CTranslate2 4.9.0 (MIT)
+nvidia-cublas-cu12==12.9.2.10  # DLL CUDA pour le GPU, sans installer le CUDA Toolkit (licence NVIDIA)
+nvidia-cudnn-cu12==9.28.1.4    # DLL cuDNN 9 (licence NVIDIA)
+# Note : PyAV 19 est incompatible avec faster_whisper.decode_audio (paramètre metadata_errors) ;
+# l'application lit elle-même le WAV 16 kHz produit par FFmpeg et n'utilise pas ce décodeur.
+
+# --- Phase 3 : évaluation des clips par IA
+anthropic==2.8.0            # SDK officiel Claude (MIT) ; utilisé seulement si ANTHROPIC_API_KEY est défini
+
+# --- Phase 5 : audio et facecam (tout en local, sur le processeur)
+# PyTorch CPU (BSD-3) : roue « +cpu » de l'index PyTorch, ~0,8 Go au lieu de ~3 Go pour CUDA.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+demucs==4.1.0               # séparation de sources htdemucs (MIT) ; poids téléchargés à part
+piper-tts==1.8.0            # synthèse vocale locale ONNX (moteur GPL-3.0, exécuté en local, non modifié)
+opencv-python-headless==5.0.0.93  # détecteur de visages YuNet (Apache-2.0)
+# Détection de musique : CNN14 (PANNs) réimplémenté dans app/audio/panns.py avec torch seul
+# (le paquet panns-inference tirait librosa, numba et ~29 dépendances).
+# Modèles (voix, PANNs, Demucs, YuNet) : python -m app.cli.models download --all (taille et
+# licence affichées, confirmation demandée) ; chargés uniquement en mode sûr (weights_only=True).

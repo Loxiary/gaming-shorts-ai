@@ -4,8 +4,13 @@ import { useHealth } from "../services/queries";
 
 const NAV = [
   { to: "/", label: "Tableau de bord", end: true },
+  { to: "/importer", label: "Importer", end: false },
   { to: "/projets", label: "Bibliothèque", end: false },
   { to: "/file", label: "File d'attente", end: false },
+  { to: "/exports", label: "Exports", end: false },
+  { to: "/profils", label: "Profils", end: false },
+  { to: "/musique", label: "Musique", end: false },
+  { to: "/couts", label: "Coûts API", end: false },
   { to: "/parametres", label: "Paramètres", end: false },
 ];
 
@@ -60,9 +65,9 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 1 — fondations.</strong> Le téléchargement, l'analyse IA et le montage
-            vidéo ne sont <strong>pas encore implémentés</strong>. Seuls des jobs de démonstration
-            sont disponibles.
+            <strong>Phase 8.</strong> Import, transcription, détection, montage vertical
+            (transitions, effets), audio, facecam, file avec pause, stockage et sauvegardes. Rien
+            n'est publié automatiquement : l'export reste votre décision.
           </div>
           <div className="status-pills" aria-live="polite">
             <BackendStatus />

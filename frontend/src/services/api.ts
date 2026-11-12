@@ -1,5 +1,7 @@
 import type {
   Health,
+  ImportRequest,
+  ImportResult,
   Job,
   JobDetail,
   JobKind,
@@ -8,7 +10,10 @@ import type {
   ProjectCreate,
   ProjectDetail,
   ProjectUpdate,
+  Source,
   SystemInfo,
+  Transcript,
+  RightsStatus,
 } from "./types";
 
 export type ApiErrorKind = "network" | "http";
@@ -58,7 +63,7 @@ function describeError(body: unknown): { message: string; code: string | null } 
   return null;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
@@ -111,6 +116,15 @@ export const api = {
   deleteProject: (id: string) =>
     request<void>("DELETE", `/api/projects/${encodeURIComponent(id)}?confirm=true`),
 
+  importSources: (data: ImportRequest) => request<ImportResult[]>("POST", "/api/imports", data),
+  updateSource: (
+    projectId: string,
+    data: { rights_status?: RightsStatus; rights_note?: string | null },
+  ) => request<Source>("PATCH", `/api/projects/${encodeURIComponent(projectId)}/source`, data),
+  getTranscript: (projectId: string) =>
+    request<Transcript>("GET", `/api/projects/${encodeURIComponent(projectId)}/transcript`),
+  mediaUrl: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/media`,
+
   listJobKinds: () => request<JobKind[]>("GET", "/api/job-kinds"),
   listJobs: (params: { status?: JobStatus; projectId?: string } = {}) => {
     const q = new URLSearchParams();
@@ -125,4 +139,7 @@ export const api = {
   cancelJob: (id: string) =>
     request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/cancel`),
   retryJob: (id: string) => request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/retry`),
+  pauseJob: (id: string) => request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/pause`),
+  resumeJob: (id: string) =>
+    request<JobDetail>("POST", `/api/jobs/${encodeURIComponent(id)}/resume`),
 };

@@ -1,0 +1,727 @@
+"""Étapes du job ``render_clip`` : plan éditorial, sous-titres, rendu, QC, risques (Phase 4).
+Les étapes facecam et audio (Phase 5) sont dans ``render_audio`` ; l'ordre complet des étapes
+est ``render_audio.RENDER_STEPS``.
+
+Le rendu n'est jamais exporté automatiquement : l'export exige une confirmation explicite
+de l'utilisateur (API /renders/{id}/confirm-export) après lecture des avertissements.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.analysis.llm import LLMResult, StructuredLLM
+from app.models import (
+    ApiUsage,
+    ClipRender,
+    SourceMedia,
+    Transcript,
+    TranscriptSegment,
+)
+from app.render import editorial as ed
+from app.render.ffmpeg_render import quality_check, render_short
+from app.render.profanity import censor_text
+from app.render.risk import build_risk_report
+from app.render.style import normalize_subtitle_style
+from app.render.subtitles import Cue, build_ass, cues_from_translation, cues_from_words
+from app.services import budget
+from app.workers.context import StepContext
+from app.workers.errors import StepError
+
+SENTENCE_GAP = 1.0  # silence (s) qui termine une phrase même sans ponctuation
+
+
+def _render(ctx: StepContext, s: Session) -> ClipRender:
+    r = s.scalar(select(ClipRender).where(ClipRender.job_id == ctx.job_id))
+    if r is None:
+        raise StepError("Rendu introuvable pour ce job.")
+    return r
+
+
+def _source(ctx: StepContext, s: Session) -> SourceMedia:
+    src = s.scalar(select(SourceMedia).where(SourceMedia.project_id == ctx.project_id))
+    if src is None or not src.media_path:
+        raise StepError("Vidéo source absente : relancez l'import.")
+    return src
+
+
+def _workdir(ctx: StepContext, render_id: str) -> Path:
+    d = ctx.settings.subdir("projects") / ctx.project_id / "renders" / render_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _sentences(
+    s: Session, source_id: str, start: float, end: float
+) -> tuple[list[ed.Sentence], str | None]:
+    """Phrases de l'extrait, temps relatifs au début du short (mots horodatés)."""
+    t = s.scalar(
+        select(Transcript)
+        .where(Transcript.source_media_id == source_id, Transcript.kind == "source")
+        .order_by(Transcript.created_at.desc())
+        .limit(1)
+    )
+    if t is None:
+        raise StepError("Transcription absente : relancez l'import.")
+    segs = s.scalars(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.transcript_id == t.id)
+        .order_by(TranscriptSegment.position)
+    )
+    sentences: list[ed.Sentence] = []
+    current: list[tuple[float, float, str]] = []
+    for seg in segs:
+        words = json.loads(seg.words_json) if seg.words_json else []
+        if not words:
+            words = [{"start": seg.start_seconds, "end": seg.end_seconds, "word": seg.text}]
+        for w in words:
+            a, b = float(w["start"]), float(w["end"])
+            if (a + b) / 2 < start or (a + b) / 2 >= end:
+                continue
+            raw = str(w["word"])
+            item = (max(a - start, 0.0), min(b - start, end - start), raw.strip())
+            if current and is_continuation(raw):
+                # Morceau découpé par Whisper (« 4 » + « ,000 ») : recollé, sans espace.
+                prev = current[-1]
+                current[-1] = (prev[0], item[1], prev[2] + item[2])
+            else:
+                if current and item[0] - current[-1][1] > SENTENCE_GAP:
+                    # Long silence sans ponctuation (transcription sans point) : nouvelle phrase.
+                    sentences.append(_sentence(current))
+                    current = []
+                current.append(item)
+            if raw.strip().endswith((".", "!", "?", "…")):
+                sentences.append(_sentence(current))
+                current = []
+    if current:
+        sentences.append(_sentence(current))
+    return sentences, t.language
+
+
+def is_continuation(raw_word: str) -> bool:
+    """Jeton Whisper qui prolonge le mot précédent : pas d'espace initiale et commence par une
+    ponctuation de liaison (« ,000 », « .5 », « -minute », « 's »)."""
+    return bool(raw_word) and not raw_word[0].isspace() and raw_word[0] in ",.-'’%"
+
+
+def _sentence(words: list[tuple[float, float, str]]) -> ed.Sentence:
+    return ed.Sentence(words[0][0], words[-1][1], " ".join(w for _, _, w in words), list(words))
+
+
+def _recorder(ctx: StepContext, purpose: str):  # type: ignore[no-untyped-def]
+    def record(result: LLMResult[Any]) -> None:
+        u = result.usage
+        cost = budget.cost_usd(
+            ctx.settings,
+            input_tokens=u.input_tokens,
+            output_tokens=u.output_tokens,
+            cache_read_tokens=u.cache_read_tokens,
+            cache_write_tokens=u.cache_write_tokens,
+        )
+        with ctx.session_factory() as s:
+            s.add(
+                ApiUsage(
+                    provider="anthropic",
+                    model=result.model,
+                    purpose=purpose,
+                    project_id=ctx.project_id,
+                    job_id=ctx.job_id,
+                    input_tokens=u.input_tokens,
+                    output_tokens=u.output_tokens,
+                    cache_read_tokens=u.cache_read_tokens,
+                    cache_write_tokens=u.cache_write_tokens,
+                    images=0,
+                    cost_usd=round(cost, 6),
+                    status=result.status,
+                    request_id=result.request_id,
+                    detail=result.error,
+                )
+            )
+            r = _render(ctx, s)
+            r.cost_usd = (r.cost_usd or 0) + cost
+            s.commit()
+        ctx.heartbeat()
+
+    return record
+
+
+def _budget(ctx: StepContext):  # type: ignore[no-untyped-def]
+    def check(estimate: float) -> None:
+        with ctx.session_factory() as s:
+            budget.check_budget(s, ctx.settings, estimate)
+
+    return check
+
+
+def _llm(ctx: StepContext) -> StructuredLLM | None:
+    llm = getattr(ctx.adapters, "editor", None)
+    if llm is None:
+        return None
+    with ctx.session_factory() as s:
+        enabled = budget.api_enabled(s)
+    return llm if (getattr(llm, "configured", False) and enabled) else None
+
+
+# --------------------------------------------------------------------------- 1. plan
+
+
+def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        profile = json.loads(r.profile_snapshot_json)
+        cand = json.loads(r.candidate_snapshot_json) if r.candidate_snapshot_json else {}
+        source = _source(ctx, s)
+        sentences, _ = _sentences(s, source.id, r.start_seconds, r.end_seconds)
+        duration = r.end_seconds - r.start_seconds
+        offset = r.start_seconds
+        tail, _ = _sentences(s, source.id, r.end_seconds, r.end_seconds + 15.0)
+        after = [ed.Sentence(x.start + duration, x.end + duration, x.text, x.words) for x in tail]
+    hook_enabled = bool(profile.get("hook_enabled", True))
+    cta_enabled = bool(profile.get("cta_enabled", True))
+    language = profile.get("output_language", "fr")
+
+    plan: ed.EditorialPlan | None = None
+    engine = "fallback"
+    note: str | None = None
+    llm = _llm(ctx)
+    if llm is not None:
+        try:
+            result = llm.call(
+                system=ed.editorial_system(
+                    language,
+                    profile.get("editorial_focus"),
+                    profile.get("name", ""),
+                    profile.get("cta_text"),
+                    narration=profile.get("narration_mode", "auto") == "auto",
+                    music=profile.get("music_mode", "suggest") == "library",
+                    effects=profile.get("effects_mode", "auto") == "auto",
+                    music_suggest=profile.get("music_mode", "suggest") == "suggest",
+                    publication=True,
+                ),
+                content=ed.editorial_content(
+                    cand.get("summary"),
+                    cand.get("reason"),
+                    cand.get("events", []),
+                    sentences,
+                    duration,
+                    offset,
+                    after,
+                ),
+                schema=ed.EditorialPlanLLM,
+                budget_check=_budget(ctx),
+                record=_recorder(ctx, "editorial_plan"),
+                validate=lambda p: (
+                    ed.validate_plan(ed.from_llm(p), sentences, duration, hook_enabled) and None
+                ),
+                max_tokens=8000,
+            )
+            if result.status == "ok" and result.parsed is not None:
+                plan = ed.validate_plan(
+                    ed.from_llm(result.parsed), sentences, duration, hook_enabled
+                )
+                engine = "llm"
+            else:
+                note = f"Plan IA indisponible ({result.error}) : plan de repli utilisé."
+        except budget.BudgetExceeded as exc:
+            note = f"{exc} Plan de repli utilisé (sans IA)."
+    else:
+        note = "IA indisponible (clé absente ou API désactivée) : plan de repli utilisé."
+
+    if plan is None:
+        peaks = [float(p) - offset for p in cand.get("signals", {}).get("audio_peaks", [])]
+        plan = ed.fallback_plan(
+            sentences,
+            [p for p in peaks if 0 <= p <= duration],
+            duration,
+            hook_enabled,
+            profile.get("cta_text"),
+            language,
+        )
+    if not hook_enabled:
+        plan.hook_text = ""
+    if not cta_enabled:
+        plan.cta_text = ""
+    if profile.get("effects_mode", "auto") != "auto":
+        plan.effects = []
+    series = profile.get("series") or {}
+    if series.get("total", 1) > 1 and series.get("index", 1) < series["total"] and cta_enabled:
+        # Partie non finale : l'appel à l'action pousse à s'abonner pour la suite.
+        plan.cta_text = SERIES_CTA.get(language, SERIES_CTA["en"]).format(n=series["index"] + 1)
+    if profile.get("music_mode", "suggest") != "suggest":
+        plan.music_suggestion = None
+    if profile.get("censor_profanity", True):
+        # Dès le plan : le titre est aussi lu par la voix (étape audio, avant les sous-titres).
+        plan.hook_text, n_hook = censor_text(plan.hook_text)
+        plan.cta_text, n_cta = censor_text(plan.cta_text)
+        if n_hook + n_cta:
+            plan.warnings.append(
+                f"{n_hook + n_cta} mot(s) grossier(s) masqué(s) dans le titre ou l'appel à "
+                "l'action."
+            )
+    if note:
+        plan.warnings.append(note)
+
+    trim = apply_trim(ctx, plan, sentences, offset, duration) if plan.trim_start > 0 else None
+    bounds = trim or (offset, offset + duration)
+    new_end = finish_end(ctx, plan, bounds[0], bounds[1])
+    if new_end != bounds[1]:
+        trim = (bounds[0], new_end)
+
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        r.plan_json = plan.model_dump_json()
+        r.plan_engine = engine
+        if trim:
+            r.start_seconds, r.end_seconds = trim
+        s.commit()
+    return {
+        "trim": [round(x, 2) for x in trim] if trim else None,
+        "engine": engine,
+        "hook": plan.hook_text,
+        "cta": plan.cta_text,
+        "zooms": len(plan.zooms),
+        "keywords": len(plan.keywords),
+    }
+
+
+# --------------------------------------------------------------------------- 2. sous-titres
+
+
+def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        profile = json.loads(r.profile_snapshot_json)
+        plan = ed.EditorialPlan.model_validate_json(r.plan_json or "{}")
+        source = _source(ctx, s)
+        sentences, src_lang = _sentences(s, source.id, r.start_seconds, r.end_seconds)
+        duration = r.end_seconds - r.start_seconds
+        render_id = r.id
+        audio_report = json.loads(r.audio_report_json) if r.audio_report_json else {}
+    narration_lines = audio_report.get("narration", {}).get("lines", [])
+    mode = profile.get("subtitle_mode", "source")
+    style = normalize_subtitle_style(profile.get("subtitle_style"))
+    target = profile.get("output_language", "fr")
+    translated = False
+    language = src_lang
+    notes: list[str] = []
+
+    cues = []
+    if mode != "off":
+        words = [w for s_ in sentences for w in s_.words]
+        cues = cues_from_words(words, style["max_words"], duration)
+        if mode == "translate" and src_lang and src_lang != target and sentences:
+            llm = _llm(ctx)
+            if llm is None:
+                notes.append(
+                    "Traduction impossible sans IA : sous-titres dans la langue d'origine."
+                )
+            else:
+                try:
+                    result = llm.call(
+                        system=ed.translation_system(src_lang, target),
+                        content=ed.translation_content(sentences),
+                        schema=ed.Translation,
+                        budget_check=_budget(ctx),
+                        record=_recorder(ctx, "subtitle_translation"),
+                        validate=lambda tr: ed.validate_translation(tr, len(sentences)),
+                        max_tokens=8000,
+                    )
+                    if result.status == "ok" and result.parsed is not None:
+                        texts = [
+                            x.text for x in sorted(result.parsed.sentences, key=lambda x: x.index)
+                        ]
+                        cues = cues_from_translation(sentences, texts, style["max_words"], duration)
+                        translated, language = True, target
+                        # Mots-clés choisis dans la traduction (ceux du plan sont en VO).
+                        plan.keywords = list(result.parsed.keywords)
+                    else:
+                        notes.append(f"Traduction échouée ({result.error}) : langue d'origine.")
+                except budget.BudgetExceeded as exc:
+                    notes.append(f"{exc} Sous-titres dans la langue d'origine.")
+
+    if mode != "off":
+        cues = _with_narration(cues, narration_lines, style["max_words"], duration)
+    censored = 0
+    if profile.get("censor_profanity", True):
+        cues, censored = _censor_cues(cues)
+        plan.keywords = [k for k in plan.keywords if not censor_text(k)[1]]
+        if censored:
+            notes.append(
+                f"{censored} mot(s) grossier(s) masqué(s) dans les textes affichés"
+                + (
+                    " et couvert(s) d'un bip."
+                    if profile.get("bleep_profanity", True)
+                    else " (audio d'origine non modifié)."
+                )
+            )
+    keywords = ed.filter_keywords(plan.keywords, [w for c in cues for (_, _, w) in c.words])
+    ass = build_ass(
+        cues=cues,
+        style=style,
+        keywords=keywords,
+        hook=plan.hook_text or None,
+        cta=plan.cta_text or None,
+        duration=duration,
+        layout=profile.get("layout", "blur"),
+        title_highlight=plan.title_highlight,
+        series=series_badge(profile),
+        mid_cta=(
+            (plan.mid_cta_t, censor_text(plan.mid_cta_text)[0])
+            if profile.get("mid_cta", True) and plan.mid_cta_text
+            else None
+        ),
+        reactions=(
+            [(r_.t, reaction_label(r_.kind, target)) for r_ in plan.reactions]
+            if profile.get("reactions", True)
+            else None
+        ),
+        reaction_anchor=_reaction_anchor(ctx, profile, source),
+    )
+    (_workdir(ctx, render_id) / "subtitles.ass").write_text(ass, encoding="utf-8")
+
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        plan.keywords = keywords
+        plan.warnings += notes
+        r.plan_json = plan.model_dump_json()
+        r.subtitles_json = json.dumps([c.to_json() for c in cues], ensure_ascii=False)
+        r.subtitle_language = language if mode != "off" else None
+        r.subtitles_are_translation = translated
+        s.commit()
+    return {
+        "mode": mode,
+        "censored_words": censored,
+        "cues": len(cues),
+        "language": language,
+        "translated": translated,
+        "keywords": keywords,
+    }
+
+
+def apply_trim(
+    ctx: StepContext,
+    plan: ed.EditorialPlan,
+    sentences: list[ed.Sentence],
+    start: float,
+    duration: float,
+) -> tuple[float, float] | None:
+    """Ouverture directe : coupe les secondes lentes du début (calé sur un début de phrase),
+    prolonge la fin d'autant (calée sur une fin de phrase), sans sortir de 61–90 s ni de la
+    vidéo. Les temps du plan sont décalés en conséquence. None si rien n'est possible."""
+    from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
+
+    wanted = plan.trim_start
+    starts = [s.start for s in sentences if 0.5 <= s.start <= wanted + 1.0]
+    if not starts:
+        plan.trim_start = 0.0
+        return None
+    trim = min(starts, key=lambda x: abs(x - wanted))
+    with ctx.session_factory() as s:
+        source = _source(ctx, s)
+        total = source.duration_seconds or (start + duration)
+        new_start = start + trim
+        target = min(start + duration + trim, new_start + MAX_CLIP_SECONDS, total)
+        later, _ = _sentences(s, source.id, new_start, min(target + 2.0, total))
+    ends = [new_start + x.end for x in later if new_start + x.end <= target + 1.0]
+    new_end = ends[-1] + 0.3 if ends and ends[-1] - new_start >= MIN_CLIP_SECONDS else target
+    new_end = min(new_end, total, new_start + MAX_CLIP_SECONDS)
+    if new_end - new_start < MIN_CLIP_SECONDS:
+        plan.trim_start = 0.0
+        plan.warnings.append("Début lent non coupé : la vidéo est trop courte pour rallonger.")
+        return None
+    plan.trim_start = round(trim, 2)
+    plan.zooms = [z.model_copy(update={"t": z.t - trim}) for z in plan.zooms if z.t - trim >= 0.3]
+    plan.effects = [
+        e.model_copy(update={"t": e.t - trim}) for e in plan.effects if e.t - trim >= 0.5
+    ]
+    plan.narration = [
+        n.model_copy(update={"t": n.t - trim}) for n in plan.narration if n.t - trim >= 0
+    ]
+    plan.reactions = [
+        r.model_copy(update={"t": r.t - trim}) for r in plan.reactions if r.t - trim >= 1.0
+    ]
+    plan.mid_cta_t = max(plan.mid_cta_t - trim, 0.0)
+    plan.warnings.append(
+        f"Ouverture directe : {trim:.1f} s coupées au début ({plan.trim_reason or 'début lent'}),"
+        f" fin prolongée de {new_end - (start + duration):.1f} s."
+    )
+    return new_start, new_end
+
+
+SERIES_CTA = {
+    "fr": "Abonne-toi pour voir la partie {n} ! 🔔",
+    "en": "Follow to watch part {n}! 🔔",
+}
+SERIES_LABEL = {"fr": "PARTIE", "en": "PART"}
+
+
+def reaction_label(kind: str, language: str) -> str:
+    from app.render.subtitles import REACTION_LABELS
+
+    labels = REACTION_LABELS.get(language, REACTION_LABELS["en"])
+    return labels.get(kind, labels["shock"])
+
+
+def _reaction_anchor(ctx: StepContext, profile: dict[str, Any], source: Any) -> tuple[int, int]:
+    """Réaction posée en bas à gauche du cercle de la facecam (qui est en haut à droite)."""
+    from app.render.ffmpeg_render import react_center
+
+    cx, cy = react_center(
+        profile.get("layout", "focus"),
+        source.width or 1920,
+        source.height or 1080,
+        ctx.settings.react_diameter,
+    )
+    off = ctx.settings.react_diameter // 2
+    return cx - off, cy + off
+
+
+def series_badge(profile: dict[str, Any]) -> dict[str, Any] | None:
+    series = profile.get("series") or {}
+    if series.get("total", 1) <= 1:
+        return None
+    lang = profile.get("output_language", "fr")
+    return {**series, "label": SERIES_LABEL.get(lang, SERIES_LABEL["en"])}
+
+
+def finish_end(ctx: StepContext, plan: ed.EditorialPlan, start: float, end: float) -> float:
+    """Fin du short : prolonge pour inclure la chute (``plan.extend_end``) et ne coupe jamais
+    une phrase en cours ; reste dans 61–90 s et dans la vidéo."""
+    from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
+
+    with ctx.session_factory() as s:
+        source = _source(ctx, s)
+        total = source.duration_seconds or end
+        limit = min(start + MAX_CLIP_SECONDS, total)
+        target = min(end + plan.extend_end, limit)
+        sents, _ = _sentences(s, source.id, start, limit)
+    spans = [(start + x.start, start + x.end) for x in sents]
+    starts = [a for a, _ in spans]
+
+    def after(e: float) -> float:
+        """Petite marge après la fin d'une phrase, sans entamer la phrase suivante."""
+        nxt = [a for a in starts if a > e - 0.01]
+        return min(e + 0.3, nxt[0] - 0.05) if nxt else e + 0.3
+
+    new_end = target
+    for a, b in spans:
+        if a < target < b:  # phrase coupée par la fin : on la termine si possible
+            if b + 0.3 <= limit:
+                new_end = after(b)
+            else:
+                done = [e for _, e in spans if e <= target and e - start >= MIN_CLIP_SECONDS]
+                new_end = after(done[-1]) if done else target
+            break
+    if new_end - start < MIN_CLIP_SECONDS:
+        return end
+    if new_end > end + 0.05:
+        plan.warnings.append(
+            f"Fin prolongée de {new_end - end:.1f} s"
+            + (f" ({plan.extend_reason})" if plan.extend_end > 0 and plan.extend_reason else "")
+            + " : la scène se termine sur une phrase complète."
+        )
+    return round(new_end, 2)
+
+
+JUMP_MIN_GAP = 3.5  # secondes minimum entre deux changements de cadre
+JUMP_START = 3.0  # pas de saut pendant l'ouverture (titre lu par la voix)
+
+
+def jump_times(sentence_starts: list[float], duration: float) -> list[float]:
+    """Instants de changement de cadre : débuts de phrase espacés d'au moins JUMP_MIN_GAP."""
+    out: list[float] = []
+    for t in sorted(sentence_starts):
+        if t < JUMP_START or t > duration - 1.0:
+            continue
+        if not out or t - out[-1] >= JUMP_MIN_GAP:
+            out.append(round(t, 3))
+    return out
+
+
+def _react(ctx: StepContext, profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Facecam réaction à incruster, si le profil la demande et que la vidéo existe."""
+    if not profile.get("react_overlay", True):
+        return None
+    st = ctx.settings
+    try:
+        path = st.resolve_data_path(st.react_video)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return {
+        "path": path,
+        "cx": st.react_center_x,
+        "cy": st.react_center_y,
+        "zoom": st.react_zoom,
+        "diameter": st.react_diameter,
+    }
+
+
+def _censor_cues(cues: list[Cue]) -> tuple[list[Cue], int]:
+    count = 0
+    for cue in cues:
+        words = []
+        for a, b, w in cue.words:
+            masked, n = censor_text(w)
+            count += n
+            words.append((a, b, masked))
+        cue.words = words
+    return cues, count
+
+
+def _with_narration(
+    cues: list[Cue], lines: list[dict[str, Any]], max_words: int, duration: float
+) -> list[Cue]:
+    """Sous-titre aussi la narration ajoutée (mots répartis sur la durée de chaque ligne,
+    sans surlignage mot à mot : les timings exacts de la voix de synthèse ne sont pas connus)."""
+    extra: list[Cue] = []
+    for line in lines:
+        words = str(line["text"]).split()
+        if not words:
+            continue
+        t0, d = float(line["t"]), float(line["duration"])
+        step = d / len(words)
+        timed = [(t0 + i * step, t0 + (i + 1) * step, w) for i, w in enumerate(words)]
+        for c in cues_from_words(timed, max_words, min(t0 + d + 0.3, duration)):
+            c.karaoke = False
+            extra.append(c)
+    if not extra:
+        return cues
+    kept = [c for c in cues if not any(c.start < e.end and e.start < c.end for e in extra)]
+    return sorted(kept + extra, key=lambda c: c.start)
+
+
+# --------------------------------------------------------------------------- 3. rendu
+
+
+def rendering(ctx: StepContext) -> dict[str, Any]:
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        profile = json.loads(r.profile_snapshot_json)
+        plan = ed.EditorialPlan.model_validate_json(r.plan_json or "{}")
+        source = _source(ctx, s)
+        src_path = ctx.settings.resolve_data_path(source.media_path or "")
+        info = (source.video_codec, source.width or 1920, source.height or 1080, source.fps)
+        start, duration, render_id = r.start_seconds, r.end_seconds - r.start_seconds, r.id
+        facecam = json.loads(r.facecam_json) if r.facecam_json else {}
+    workdir = _workdir(ctx, render_id)
+    crop = facecam.get("crop") if facecam.get("status") == "detected" else None
+    audio_file = "audio_mix.wav" if (workdir / "audio_mix.wav").is_file() else None
+    react = _react(ctx, profile)
+    jumps: list[float] = []
+    if profile.get("jump_zoom", True):
+        with ctx.session_factory() as s:
+            sentences, _ = _sentences(s, _source(ctx, s).id, start, start + duration)
+        jumps = jump_times([x.start for x in sentences], duration)
+    if profile.get("react_overlay", True) and react is None:
+        with ctx.session_factory() as s:
+            r = _render(ctx, s)
+            plan.warnings.append(
+                f"Facecam réaction absente ({ctx.settings.react_video}) : short monté sans."
+            )
+            r.plan_json = plan.model_dump_json()
+            s.commit()
+    if not (workdir / "subtitles.ass").is_file():
+        raise StepError("Fichier de sous-titres absent : relancez le montage.")
+    out = render_short(
+        source=src_path,
+        workdir=workdir,
+        ass_name="subtitles.ass",
+        out_name="short",
+        start=start,
+        duration=duration,
+        layout=profile.get("layout", "blur"),
+        encoder=profile.get("render_encoder", "libx264"),
+        src_codec=info[0],
+        src_w=info[1],
+        src_h=info[2],
+        src_fps=info[3],
+        zooms=plan.zooms,
+        zoom_intensity=float(profile.get("zoom_intensity", 0.12)),
+        on_progress=ctx.report_progress,
+        check_cancel=ctx.check_cancel,
+        x264_preset=ctx.settings.render_x264_preset,
+        crop=crop,
+        audio_file=audio_file,
+        effects=plan.effects,
+        transition_in=profile.get("transition_in", "none"),
+        transition_out=profile.get("transition_out", "none"),
+        react=react,
+        focus=[(float(t), float(x)) for t, x in facecam.get("focus") or []],
+        jumps=jumps,
+        progress=bool(profile.get("progress_bar", True)),
+    )
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        r.output_path = ctx.settings.to_relative(out)
+        r.output_size_bytes = out.stat().st_size
+        s.commit()
+    return {"output_path": ctx.settings.to_relative(out), "size_bytes": out.stat().st_size}
+
+
+# --------------------------------------------------------------------------- 4. QC
+
+
+def quality_checking(ctx: StepContext) -> dict[str, Any]:
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        out = ctx.settings.resolve_data_path(r.output_path or "")
+        expected = r.end_seconds - r.start_seconds
+    ctx.report_progress(0.2, "Analyse du fichier produit…")
+    qc = quality_check(out, expected)
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        r.qc_json = json.dumps(qc, ensure_ascii=False)
+        r.qc_passed = qc["passed"]
+        s.commit()
+    failed = [c["label"] for c in qc["checks"] if not c["ok"] and c["level"] == "critical"]
+    if failed:
+        # Fichier invalide : il n'est jamais marqué prêt ; les diagnostics restent consultables.
+        raise StepError("Contrôle qualité échoué : " + " ; ".join(failed))
+    return {
+        "passed": qc["passed"],
+        "warnings": sum(1 for c in qc["checks"] if not c["ok"]),
+        **qc["measures"],
+    }
+
+
+# --------------------------------------------------------------------------- 5. risques
+
+
+def building_risk_report(ctx: StepContext) -> dict[str, Any]:
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        source = _source(ctx, s)
+        report = build_risk_report(
+            source={
+                "title": source.title,
+                "uploader": source.uploader,
+                "url": source.url,
+                "platform_license": source.platform_license,
+                "rights_status": source.rights_status,
+                "rights_note": source.rights_note,
+            },
+            profile=json.loads(r.profile_snapshot_json),
+            plan=json.loads(r.plan_json) if r.plan_json else None,
+            plan_engine=r.plan_engine,
+            subtitles_translated=r.subtitles_are_translation,
+            subtitles_enabled=bool(r.subtitles_json and json.loads(r.subtitles_json)),
+            candidate=json.loads(r.candidate_snapshot_json) if r.candidate_snapshot_json else None,
+            qc=json.loads(r.qc_json) if r.qc_json else None,
+            audio=json.loads(r.audio_report_json) if r.audio_report_json else None,
+            facecam=json.loads(r.facecam_json) if r.facecam_json else None,
+            credits=json.loads(r.credits_json) if r.credits_json else [],
+        )
+        r.risk_report_json = json.dumps(report, ensure_ascii=False)
+        s.commit()
+    return {
+        "reused_content": report["reused_content"]["level"],
+        "transformation": report["transformation"]["level"],
+        "blocking": False,
+    }

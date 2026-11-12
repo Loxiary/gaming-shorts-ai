@@ -1,3 +1,15 @@
+from app.models.analysis import (
+    CRITERIA,
+    MAX_CLIP_SECONDS,
+    MIN_CLIP_SECONDS,
+    ApiUsage,
+    AppSetting,
+    ClipAnalysis,
+    ClipCandidate,
+    ClipScore,
+    EditingProfile,
+    SceneSegment,
+)
 from app.models.base import Base
 from app.models.entities import (
     ACTIVE_JOB_STATUSES,
@@ -6,11 +18,29 @@ from app.models.entities import (
     JobStatus,
     JobStep,
     Project,
+    RightsStatus,
+    SourceMedia,
     StepStatus,
+    Transcript,
+    TranscriptSegment,
     WorkerHeartbeat,
 )
+from app.models.music import MusicTrack
+from app.models.render import ClipRender
 
 __all__ = [
+    "CRITERIA",
+    "MAX_CLIP_SECONDS",
+    "MIN_CLIP_SECONDS",
+    "ApiUsage",
+    "AppSetting",
+    "ClipAnalysis",
+    "ClipCandidate",
+    "ClipRender",
+    "MusicTrack",
+    "ClipScore",
+    "EditingProfile",
+    "SceneSegment",
     "ACTIVE_JOB_STATUSES",
     "TERMINAL_JOB_STATUSES",
     "Base",
@@ -18,6 +48,10 @@ __all__ = [
     "JobStatus",
     "JobStep",
     "Project",
+    "RightsStatus",
+    "SourceMedia",
     "StepStatus",
+    "Transcript",
+    "TranscriptSegment",
     "WorkerHeartbeat",
 ]

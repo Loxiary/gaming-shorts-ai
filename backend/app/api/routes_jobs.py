@@ -55,6 +55,17 @@ def cancel_job(job_id: str, session: SessionDep) -> JobDetailOut:
     return svc.job_to_detail(svc.request_cancel(session, job_id))
 
 
+@router.post("/jobs/{job_id}/pause", response_model=JobDetailOut)
+def pause_job(job_id: str, session: SessionDep) -> JobDetailOut:
+    """Pause sûre : immédiate si le job attend, sinon à la fin de l'étape en cours."""
+    return svc.job_to_detail(svc.request_pause(session, job_id))
+
+
+@router.post("/jobs/{job_id}/resume", response_model=JobDetailOut)
+def resume_job(job_id: str, session: SessionDep) -> JobDetailOut:
+    return svc.job_to_detail(svc.resume_job(session, job_id))
+
+
 @router.post("/jobs/{job_id}/retry", response_model=JobDetailOut)
 def retry_job(job_id: str, session: SessionDep) -> JobDetailOut:
     return svc.job_to_detail(svc.retry_job(session, job_id))

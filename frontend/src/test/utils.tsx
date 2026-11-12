@@ -98,6 +98,8 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
     status: "queued",
     progress: 0,
     current_step: null,
+    current_step_label: null,
+    current_step_detail: null,
     error_message: null,
     cancel_requested: false,
     attempts: 0,

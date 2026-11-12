@@ -28,7 +28,8 @@ if (-not (Test-Path $VenvPython)) {
     python -m venv (Join-Path $BackendDir '.venv')
     if ($LASTEXITCODE -ne 0) { Write-Err 'Creation du venv impossible'; exit 1 }
 }
-& $VenvPython -m pip install --disable-pip-version-check -q -r (Join-Path $BackendDir 'requirements-dev.txt')
+# --no-cache-dir : evite ~2 Go de cache pip (bibliotheques CUDA) sur le disque systeme.
+& $VenvPython -m pip install --disable-pip-version-check --no-cache-dir -q -r (Join-Path $BackendDir 'requirements-dev.txt')
 if ($LASTEXITCODE -ne 0) { Write-Err 'pip install a echoue'; exit 1 }
 Write-Ok 'Dependances Python installees'
 
@@ -47,6 +48,17 @@ try {
     if ($LASTEXITCODE -ne 0) { Write-Err 'Migration echouee'; exit 1 }
 } finally { Pop-Location }
 Write-Ok 'Base a jour'
+
+Write-Step 'Modele de transcription (faster-whisper)'
+Push-Location $BackendDir
+try {
+    & $VenvPython -m app.cli.models status
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn2 'Modele absent : la transcription echouera tant qu''il ne sera pas telecharge.'
+        Write-Warn2 'Telechargement (taille affichee, confirmation demandee) :'
+        Write-Warn2 '  cd backend; .\.venv\Scripts\python.exe -m app.cli.models download'
+    }
+} finally { Pop-Location }
 
 Write-Host ''
 Write-Host 'Installation terminee. Lancement : powershell -ExecutionPolicy Bypass -File scripts\start.ps1' -ForegroundColor Green

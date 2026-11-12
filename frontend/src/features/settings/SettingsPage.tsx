@@ -1,3 +1,7 @@
+import { ApiSettingsCard } from "../analysis/ApiSettingsCard";
+import { BackupsCard } from "./BackupsCard";
+import { RuntimeSettingsCard } from "./RuntimeSettingsCard";
+import { StorageCard } from "./StorageCard";
 import { ErrorBox, Loading } from "../../components/Feedback";
 import { formatBytes } from "../../services/format";
 import { useSystem } from "../../services/queries";
@@ -13,8 +17,9 @@ export function SettingsPage() {
     <section>
       <h1>Paramètres</h1>
       <p className="muted">
-        Configuration en lecture seule. Pour la modifier, éditez le fichier <code>.env</code> à la
-        racine du projet puis redémarrez l'application (<code>scripts\stop.ps1</code> puis{" "}
+        Appels payants, plafond mensuel, réglages courants, stockage et sauvegardes se gèrent ici.
+        Le reste (dossier de données, ports, clé API) se modifie dans le fichier <code>.env</code> à
+        la racine du projet, puis en redémarrant l'application (<code>scripts\stop.ps1</code> puis{" "}
         <code>scripts\start.ps1</code>).
       </p>
 
@@ -44,7 +49,67 @@ export function SettingsPage() {
             <dt>Reprise d'un job abandonné après</dt>
             <dd>{s.worker_stale_seconds} s sans signe de vie du worker</dd>
           </div>
+          <div>
+            <dt>Import YouTube</dt>
+            <dd>
+              {s.max_download_height}p maximum, vidéos de {s.max_source_minutes} min maximum
+            </dd>
+          </div>
         </dl>
+      </div>
+
+      <ApiSettingsCard />
+      <RuntimeSettingsCard />
+      <StorageCard />
+      <BackupsCard />
+
+      <div className="card">
+        <h2>Transcription et GPU</h2>
+        <dl className="details">
+          {s.asr && (
+            <>
+              <div>
+                <dt>Modèle</dt>
+                <dd>
+                  {s.asr.engine} · {s.asr.model}{" "}
+                  {s.asr.model_present ? (
+                    <span className="badge badge-completed">Installé</span>
+                  ) : (
+                    <span className="badge badge-failed">Absent</span>
+                  )}
+                  <br />
+                  <code>{s.asr.model_dir}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Exécution</dt>
+                <dd>
+                  appareil {s.asr.device}, précision {s.asr.compute_type}, langue {s.asr.language},
+                  filtre de voix (VAD) {s.asr.vad ? "activé" : "désactivé"}
+                </dd>
+              </div>
+            </>
+          )}
+          <div>
+            <dt>GPU</dt>
+            <dd>
+              {s.gpu ? (
+                <>
+                  {s.gpu.name} — VRAM utilisée {s.gpu.memory_used_mib} / {s.gpu.memory_total_mib}{" "}
+                  Mio (libre {s.gpu.memory_free_mib} Mio), pilote {s.gpu.driver_version}
+                </>
+              ) : (
+                "Aucun GPU NVIDIA détecté : la transcription utilisera le CPU."
+              )}
+            </dd>
+          </div>
+        </dl>
+        {s.asr && !s.asr.model_present && (
+          <p className="job-error">
+            Modèle absent : la transcription échouera. Téléchargez-le avec{" "}
+            <code>cd backend; .\.venv\Scripts\python.exe -m app.cli.models download</code>
+          </p>
+        )}
       </div>
 
       <div className="card">
@@ -96,7 +161,7 @@ export function SettingsPage() {
       <div className="card">
         <h2>Outils détectés</h2>
         <p className="muted">
-          Détection seulement : FFmpeg n'est pas encore utilisé par l'application.
+          FFmpeg et ffprobe sont utilisés pour l'analyse technique et l'extraction de l'audio.
         </p>
         <ul className="plain">
           {s.tools.map((t) => (

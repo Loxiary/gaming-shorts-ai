@@ -12,10 +12,10 @@ import {
 } from "../test/utils";
 
 describe("Layout et connexion backend", () => {
-  it("affiche en permanence que l'IA et la vidéo ne sont pas implémentées", async () => {
+  it("affiche en permanence la phase et que rien n'est publié automatiquement", async () => {
     mockFetch((c) => (c.url === "/api/health" ? { body: health } : { body: [] }));
     renderApp("/");
-    expect(screen.getByRole("note")).toHaveTextContent(/pas encore implémentés/);
+    expect(screen.getByRole("note")).toHaveTextContent(/Rien n'est publié automatiquement/);
     expect(await screen.findByText("Backend connecté")).toBeInTheDocument();
     expect(screen.getByText("Worker actif")).toBeInTheDocument();
   });
@@ -59,14 +59,17 @@ describe("Bibliothèque de projets", () => {
     const calls = mockFetch((c) => {
       if (c.url === "/api/projects" && c.method === "POST") return { status: 201, body: created };
       if (c.url === "/api/projects") return { body: [] };
-      if (c.url === "/api/projects/new1") return { body: { ...created, jobs: [] } };
+      if (c.url === "/api/projects/new1")
+        return {
+          body: { ...created, jobs: [], source: null, transcript: null, files_size_bytes: 0 },
+        };
       if (c.url === "/api/job-kinds") return { body: [] };
       return { body: health };
     });
     const user = userEvent.setup();
     renderApp("/projets");
 
-    await user.click(await screen.findByRole("button", { name: "Nouveau projet" }));
+    await user.click(await screen.findByRole("button", { name: "Nouveau projet de test" }));
     await user.click(screen.getByRole("button", { name: "Créer le projet" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Le nom du projet est obligatoire.");
 
@@ -86,7 +89,10 @@ describe("Fiche projet", () => {
 
   it("ajoute un job de démonstration à la file", async () => {
     const calls = mockFetch((c) => {
-      if (c.url === "/api/projects/p1") return { body: { ...makeProject(), jobs: [] } };
+      if (c.url === "/api/projects/p1")
+        return {
+          body: { ...makeProject(), jobs: [], source: null, transcript: null, files_size_bytes: 0 },
+        };
       if (c.url === "/api/job-kinds") return { body: kinds };
       if (c.url === "/api/jobs" && c.method === "POST")
         return { status: 201, body: { ...makeJob(), steps: [] } };
@@ -106,7 +112,10 @@ describe("Fiche projet", () => {
   it("exige une confirmation avant de supprimer", async () => {
     const calls = mockFetch((c) => {
       if (c.method === "DELETE") return { status: 204 };
-      if (c.url === "/api/projects/p1") return { body: { ...makeProject(), jobs: [] } };
+      if (c.url === "/api/projects/p1")
+        return {
+          body: { ...makeProject(), jobs: [], source: null, transcript: null, files_size_bytes: 0 },
+        };
       if (c.url === "/api/projects") return { body: [] };
       if (c.url === "/api/job-kinds") return { body: kinds };
       return { body: health };

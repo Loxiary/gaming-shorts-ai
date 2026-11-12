@@ -1,7 +1,8 @@
 """Catalogue des types de jobs connus.
 
-Phase 1 : seuls des jobs de DÉMONSTRATION existent. Ils n'effectuent aucun téléchargement,
-aucune analyse et aucun rendu ; ils simulent des étapes pour valider la file persistante.
+- ``ingest_youtube`` : traitement réel (Phase 2), créé par l'import d'un lien.
+- ``demo`` / ``demo_failure`` : jobs de DÉMONSTRATION (simple attente, aucun traitement),
+  conservés pour tester la file d'attente.
 """
 
 from __future__ import annotations
@@ -31,7 +32,71 @@ _DEMO_STEPS = (
     StepDefinition("demo_finalize", "Finalisation (simulation)"),
 )
 
+INGEST_STEPS = (
+    StepDefinition("validating_source", "Validation de la source"),
+    StepDefinition("downloading", "Téléchargement"),
+    StepDefinition("probing_media", "Analyse technique (ffprobe)"),
+    StepDefinition("extracting_audio", "Extraction de l'audio"),
+    StepDefinition("transcribing", "Transcription (faster-whisper)"),
+)
+
+ANALYZE_STEPS = (
+    StepDefinition("preparing_proxy", "Préparation de l'analyse (copie légère)"),
+    StepDefinition("detecting_scenes", "Détection des changements de scène"),
+    StepDefinition("analyzing_audio", "Analyse des signaux audio et de parole"),
+    StepDefinition("generating_candidates", "Proposition d'extraits (61–90 s)"),
+    StepDefinition("sampling_frames", "Extraction d'images horodatées"),
+    StepDefinition("scoring_candidates", "Évaluation des extraits"),
+    StepDefinition("selecting_clips", "Sélection (seuil, doublons)"),
+)
+
+RENDER_STEPS = (
+    StepDefinition(
+        "creating_editorial_plan", "Plan éditorial (accroche, appel à l'action, zooms, narration)"
+    ),
+    StepDefinition("detecting_facecam", "Détection du facecam"),
+    StepDefinition("preparing_audio", "Audio : musique d'origine, narration, musique, mixage"),
+    StepDefinition("preparing_subtitles", "Sous-titres (traduction si demandée)"),
+    StepDefinition("rendering", "Rendu vertical 1080×1920"),
+    StepDefinition("quality_check", "Contrôle qualité du fichier"),
+    StepDefinition("building_risk_report", "Rapport de risques"),
+    StepDefinition("preparing_publication", "Textes de publication (TikTok, YouTube) et musique"),
+)
+
 JOB_KINDS: dict[str, JobKind] = {
+    "render_clip": JobKind(
+        kind="render_clip",
+        label="Montage du short",
+        description=(
+            "Prépare le plan éditorial, détecte le facecam, traite l'audio (musique "
+            "d'origine, narration, musique ajoutée), les sous-titres animés, rend le short, "
+            "contrôle le fichier produit et établit le rapport de risques. L'export reste "
+            "soumis à votre confirmation."
+        ),
+        is_demo=False,
+        steps=RENDER_STEPS,
+    ),
+    "analyze_clips": JobKind(
+        kind="analyze_clips",
+        label="Analyse et détection des clips",
+        description=(
+            "Détecte les moments forts (scènes, audio, parole), propose des extraits de "
+            "61 à 90 s, les fait évaluer (IA ou signaux seuls) et sélectionne ceux qui "
+            "dépassent le seuil du profil."
+        ),
+        is_demo=False,
+        steps=ANALYZE_STEPS,
+    ),
+    "ingest_youtube": JobKind(
+        kind="ingest_youtube",
+        label="Import YouTube et transcription",
+        description=(
+            "Vérifie la vidéo, la télécharge (yt-dlp), l'analyse (ffprobe), extrait l'audio "
+            "et produit la transcription source horodatée (faster-whisper, en local)."
+        ),
+        is_demo=False,
+        steps=INGEST_STEPS,
+    ),
     "demo": JobKind(
         kind="demo",
         label="Démonstration",

@@ -16,10 +16,18 @@ def _job(client: TestClient, job_id: str) -> dict:
     return client.get(f"/api/jobs/{job_id}").json()
 
 
-def test_job_kinds_are_demo_only(client: TestClient) -> None:
-    kinds = client.get("/api/job-kinds").json()
-    assert {k["kind"] for k in kinds} == {"demo", "demo_failure"}
-    assert all(k["is_demo"] for k in kinds)
+def test_job_kinds(client: TestClient) -> None:
+    kinds = {k["kind"]: k for k in client.get("/api/job-kinds").json()}
+    assert set(kinds) == {"demo", "demo_failure", "ingest_youtube", "analyze_clips", "render_clip"}
+    assert kinds["demo"]["is_demo"] and kinds["demo_failure"]["is_demo"]
+    assert not kinds["ingest_youtube"]["is_demo"]
+    assert not kinds["analyze_clips"]["is_demo"]
+
+
+def test_ingest_job_requires_a_source(client: TestClient, project_id: str) -> None:
+    r = client.post("/api/jobs", json={"project_id": project_id, "kind": "ingest_youtube"})
+    assert r.status_code == 400
+    assert "Importer" in r.json()["error"]["message"]
 
 
 def test_enqueue_creates_persisted_steps(client: TestClient, project_id: str) -> None:
