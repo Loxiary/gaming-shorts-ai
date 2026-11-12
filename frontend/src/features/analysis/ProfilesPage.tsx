@@ -33,6 +33,7 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     subtitle_style: { ...DEFAULT_STYLE },
     layout: "focus",
     jump_zoom: true,
+    progress_bar: true,
     zoom_intensity: 0.12,
     hook_enabled: true,
     cta_enabled: true,
@@ -478,6 +479,14 @@ function MontageSettings({
           onChange={(e) => set("jump_zoom", e.target.checked)}
         />
         Rythme : recadrage franc à chaque changement de phrase (toutes les 3,5 s au moins)
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.progress_bar}
+          onChange={(e) => set("progress_bar", e.target.checked)}
+        />
+        Barre de progression en haut de l'écran
       </label>
       <label>
         Intensité des zooms ({Math.round(data.zoom_intensity * 100)} %)

@@ -179,6 +179,8 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
         sentences, _ = _sentences(s, source.id, r.start_seconds, r.end_seconds)
         duration = r.end_seconds - r.start_seconds
         offset = r.start_seconds
+        tail, _ = _sentences(s, source.id, r.end_seconds, r.end_seconds + 15.0)
+        after = [ed.Sentence(x.start + duration, x.end + duration, x.text, x.words) for x in tail]
     hook_enabled = bool(profile.get("hook_enabled", True))
     cta_enabled = bool(profile.get("cta_enabled", True))
     language = profile.get("output_language", "fr")
@@ -208,6 +210,7 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
                     sentences,
                     duration,
                     offset,
+                    after,
                 ),
                 schema=ed.EditorialPlan,
                 budget_check=_budget(ctx),
@@ -240,6 +243,10 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
         plan.cta_text = ""
     if profile.get("effects_mode", "auto") != "auto":
         plan.effects = []
+    series = profile.get("series") or {}
+    if series.get("total", 1) > 1 and series.get("index", 1) < series["total"] and cta_enabled:
+        # Partie non finale : l'appel à l'action pousse à s'abonner pour la suite.
+        plan.cta_text = SERIES_CTA.get(language, SERIES_CTA["en"]).format(n=series["index"] + 1)
     if profile.get("music_mode", "suggest") != "suggest":
         plan.music_suggestion = None
     if profile.get("censor_profanity", True):
@@ -255,6 +262,10 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
         plan.warnings.append(note)
 
     trim = apply_trim(ctx, plan, sentences, offset, duration) if plan.trim_start > 0 else None
+    bounds = trim or (offset, offset + duration)
+    new_end = finish_end(ctx, plan, bounds[0], bounds[1])
+    if new_end != bounds[1]:
+        trim = (bounds[0], new_end)
 
     with ctx.session_factory() as s:
         r = _render(ctx, s)
@@ -352,6 +363,8 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         cta=plan.cta_text or None,
         duration=duration,
         layout=profile.get("layout", "blur"),
+        title_highlight=plan.title_highlight,
+        series=series_badge(profile),
     )
     (_workdir(ctx, render_id) / "subtitles.ass").write_text(ass, encoding="utf-8")
 
@@ -418,6 +431,60 @@ def apply_trim(
         f" fin prolongée de {new_end - (start + duration):.1f} s."
     )
     return new_start, new_end
+
+
+SERIES_CTA = {
+    "fr": "Abonne-toi pour voir la partie {n} ! 🔔",
+    "en": "Follow to watch part {n}! 🔔",
+}
+SERIES_LABEL = {"fr": "PARTIE", "en": "PART"}
+
+
+def series_badge(profile: dict[str, Any]) -> dict[str, Any] | None:
+    series = profile.get("series") or {}
+    if series.get("total", 1) <= 1:
+        return None
+    lang = profile.get("output_language", "fr")
+    return {**series, "label": SERIES_LABEL.get(lang, SERIES_LABEL["en"])}
+
+
+def finish_end(ctx: StepContext, plan: ed.EditorialPlan, start: float, end: float) -> float:
+    """Fin du short : prolonge pour inclure la chute (``plan.extend_end``) et ne coupe jamais
+    une phrase en cours ; reste dans 61–90 s et dans la vidéo."""
+    from app.models import MAX_CLIP_SECONDS, MIN_CLIP_SECONDS
+
+    with ctx.session_factory() as s:
+        source = _source(ctx, s)
+        total = source.duration_seconds or end
+        limit = min(start + MAX_CLIP_SECONDS, total)
+        target = min(end + plan.extend_end, limit)
+        sents, _ = _sentences(s, source.id, start, limit)
+    spans = [(start + x.start, start + x.end) for x in sents]
+    starts = [a for a, _ in spans]
+
+    def after(e: float) -> float:
+        """Petite marge après la fin d'une phrase, sans entamer la phrase suivante."""
+        nxt = [a for a in starts if a > e - 0.01]
+        return min(e + 0.3, nxt[0] - 0.05) if nxt else e + 0.3
+
+    new_end = target
+    for a, b in spans:
+        if a < target < b:  # phrase coupée par la fin : on la termine si possible
+            if b + 0.3 <= limit:
+                new_end = after(b)
+            else:
+                done = [e for _, e in spans if e <= target and e - start >= MIN_CLIP_SECONDS]
+                new_end = after(done[-1]) if done else target
+            break
+    if new_end - start < MIN_CLIP_SECONDS:
+        return end
+    if new_end > end + 0.05:
+        plan.warnings.append(
+            f"Fin prolongée de {new_end - end:.1f} s"
+            + (f" ({plan.extend_reason})" if plan.extend_end > 0 and plan.extend_reason else "")
+            + " : la scène se termine sur une phrase complète."
+        )
+    return round(new_end, 2)
 
 
 JUMP_MIN_GAP = 3.5  # secondes minimum entre deux changements de cadre
@@ -547,6 +614,7 @@ def rendering(ctx: StepContext) -> dict[str, Any]:
         react=react,
         focus=[(float(t), float(x)) for t, x in facecam.get("focus") or []],
         jumps=jumps,
+        progress=bool(profile.get("progress_bar", True)),
     )
     with ctx.session_factory() as s:
         r = _render(ctx, s)

@@ -36,6 +36,7 @@ class ProfileIn(BaseModel):
     subtitle_style: dict[str, Any] = Field(default_factory=dict)
     layout: Literal["focus", "blur", "fill"] = "focus"
     jump_zoom: bool = True
+    progress_bar: bool = True
     zoom_intensity: float = Field(default=0.12, ge=0, le=0.5)
     hook_enabled: bool = True
     cta_enabled: bool = True
@@ -135,6 +136,7 @@ class ProfileOut(BaseModel):
     subtitle_style: dict[str, Any]
     layout: str
     jump_zoom: bool
+    progress_bar: bool
     zoom_intensity: float
     hook_enabled: bool
     cta_enabled: bool

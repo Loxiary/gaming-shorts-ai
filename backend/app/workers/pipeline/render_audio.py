@@ -518,6 +518,8 @@ def preparing_publication(ctx: StepContext) -> dict[str, Any]:
             candidate_summary=cand.get("summary"),
             game=project_game.game if project_game else None,
             censor=bool(profile.get("censor_profanity", True)),
+            series=profile.get("series"),
+            language=profile.get("output_language", "fr"),
         )
         r.publication_json = json.dumps(pub, ensure_ascii=False)
         s.commit()

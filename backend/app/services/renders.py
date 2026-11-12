@@ -62,6 +62,34 @@ def audiences(src_lang: str | None) -> list[str]:
     return ["fr"] if src_lang in (None, "fr") else ["en", "fr"]
 
 
+SERIES_MAX_GAP = 10.0  # secondes entre deux extraits sélectionnés pour former une série
+
+
+def series_of(session: Session, candidate: ClipCandidate) -> dict[str, int] | None:
+    """Extraits SÉLECTIONNÉS qui se suivent dans la vidéo (écart ≤ 10 s) : une série
+    « Partie i/N » qui pousse à s'abonner pour la suite."""
+    chosen = sorted(
+        session.scalars(
+            select(ClipCandidate).where(
+                ClipCandidate.analysis_id == candidate.analysis_id,
+                ClipCandidate.selected.is_(True),
+            )
+        ),
+        key=lambda c: c.start_seconds,
+    )
+    chains: list[list[ClipCandidate]] = []
+    for c in chosen:
+        if chains and c.start_seconds - chains[-1][-1].end_seconds <= SERIES_MAX_GAP:
+            chains[-1].append(c)
+        else:
+            chains.append([c])
+    for chain in chains:
+        ids = [c.id for c in chain]
+        if candidate.id in ids and len(chain) > 1:
+            return {"index": ids.index(candidate.id) + 1, "total": len(chain)}
+    return None
+
+
 def audience_profile(base: dict[str, Any], lang: str, src_lang: str | None) -> dict[str, Any]:
     """Profil adapté au public : titre, voix, sous-titres et publication dans sa langue."""
     p = dict(base)
@@ -103,6 +131,7 @@ def create_render(session: Session, candidate_id: str, profile_id: str | None) -
         )
     )
     src_lang = source_language(session, analysis.project_id)
+    series = series_of(session, candidate)
     wanted = [lang for lang in audiences(src_lang) if lang not in active_langs]
     if not wanted or None in active_langs:
         raise ConflictError("Un montage de cet extrait est déjà en attente ou en cours.")
@@ -126,7 +155,8 @@ def create_render(session: Session, candidate_id: str, profile_id: str | None) -
             end_seconds=candidate.end_seconds,
             audience_language=lang,
             profile_snapshot_json=json.dumps(
-                audience_profile(profile_snapshot, lang, src_lang), ensure_ascii=False
+                {**audience_profile(profile_snapshot, lang, src_lang), "series": series},
+                ensure_ascii=False,
             ),
             candidate_snapshot_json=candidate_to_out(candidate).model_dump_json(),
         )

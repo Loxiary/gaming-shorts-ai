@@ -50,6 +50,8 @@ def build_publication(
     candidate_summary: str | None,
     game: str | None,
     censor: bool = True,
+    series: dict[str, Any] | None = None,
+    language: str = "fr",
 ) -> dict[str, Any]:
     pub = plan.publication
     if pub is None:  # plan sans IA : textes minimaux, signalés comme tels
@@ -73,7 +75,13 @@ def build_publication(
     yt_desc = "\n\n".join(
         x for x in (pub.context, pub.question, "\n".join(credit_lines), tags) if x
     )
-    texts = {"tiktok": tiktok_full, "title": pub.youtube_title, "description": yt_desc}
+    title = pub.youtube_title
+    if series and series.get("total", 1) > 1:
+        word = "Partie" if language == "fr" else "Part"
+        tag = f"({word} {series['index']}/{series['total']})"
+        title = f"{title} {tag}"
+        tiktok_full = f"{tag} {tiktok_full}"
+    texts = {"tiktok": tiktok_full, "title": title, "description": yt_desc}
     censored = 0
     if censor:
         for k, v in texts.items():

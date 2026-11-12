@@ -121,6 +121,55 @@ def _escape(text: str) -> str:
     return text.replace("\\", "/").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
+TITLE_MAX_SIZE = 112
+TITLE_MIN_SIZE = 70
+TITLE_HIGHLIGHT = "#FFD000"
+
+
+def balance_title(text: str, keep: str = "") -> list[str]:
+    """Coupe le titre en deux lignes de longueurs proches (une seule ligne s'il est court),
+    sans jamais couper à l'intérieur du groupe de mots ``keep`` (le mot fort coloré)."""
+    words = text.split()
+    if len(text) <= 18 or len(words) < 2:
+        return [text]
+    lo = text.lower().find(keep.lower()) if keep else -1
+    hi = lo + len(keep)
+
+    def allowed(i: int) -> bool:
+        cut = len(" ".join(words[:i]))  # position de l'espace de coupure
+        return lo < 0 or not lo < cut < hi
+
+    splits = [i for i in range(1, len(words)) if allowed(i)] or list(range(1, len(words)))
+    best = min(splits, key=lambda i: max(len(" ".join(words[:i])), len(" ".join(words[i:]))))
+    return [" ".join(words[:best]), " ".join(words[best:])]
+
+
+def title_size(lines: list[str]) -> int:
+    """Le plus gros possible : ~0,45 em par caractère (mesuré sur un rendu réel, police grasse)
+    dans 940 px de large."""
+    longest = max(max((len(x) for x in lines), default=1), 1)
+    return int(min(TITLE_MAX_SIZE, max(TITLE_MIN_SIZE, 940 / (0.45 * longest))))
+
+
+def title_ass(text: str, highlight: str = "") -> str:
+    """Texte ASS du titre : deux lignes équilibrées, mot fort en couleur, entrée animée."""
+    color = ass_inline_color(TITLE_HIGHLIGHT)
+    white = ass_inline_color("#FFFFFF")
+    out = []
+    for line in balance_title(text, highlight):
+        i = line.lower().find(highlight.lower()) if highlight else -1
+        if i >= 0:
+            j = i + len(highlight)
+            out.append(
+                f"{_escape(line[:i])}{{\\c{color}}}{_escape(line[i:j])}"
+                f"{{\\c{white}}}{_escape(line[j:])}"
+            )
+        else:
+            out.append(_escape(line))
+    pop = "{\\fad(120,0)\\fscx55\\fscy55\\t(0,260,\\fscx100\\fscy100)}"
+    return pop + "\\N".join(out)
+
+
 def _ts(t: float) -> str:
     t = max(0.0, t)
     h, rem = divmod(t, 3600)
@@ -143,6 +192,8 @@ def build_ass(
     cta: str | None,
     duration: float,
     layout: str,
+    title_highlight: str = "",
+    series: dict[str, int] | None = None,
 ) -> str:
     font = style["font"]
     size = style["size"]
@@ -167,7 +218,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Sub,{font},{size},{text_c},{text_c},&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,2,70,70,{sub_margin},1
-Style: Hook,{font},{_hook_size(hook or "", 100)},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,18,0,8,60,60,150,1
+Style: Hook,{font},{title_size(balance_title(hook or "", title_highlight))},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,18,0,8,60,60,150,1
+Style: Badge,{font},44,&H00101010,&H00101010,{ass_color(TITLE_HIGHLIGHT)},{ass_color(TITLE_HIGHLIGHT)},-1,0,0,0,100,100,0,0,3,10,0,7,40,40,40,1
 Style: Cta,{font},58,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,90,90,{cta_margin},1
 
 [Events]
@@ -205,7 +257,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     if hook:
         # Titre affiché pendant TOUTE la vidéo (et lu par la voix au début).
         lines.append(
-            f"Dialogue: 2,{_ts(0)},{_ts(duration)},Hook,,0,0,0,,{{\\fad(150,0)}}{_escape(hook)}"
+            f"Dialogue: 2,{_ts(0)},{_ts(duration)},Hook,,0,0,0,,{title_ass(hook, title_highlight)}"
+        )
+    if series and series.get("total", 1) > 1:
+        label = series.get("label") or "PARTIE"
+        lines.append(
+            f"Dialogue: 3,{_ts(0)},{_ts(duration)},Badge,,0,0,0,,"
+            f"{_escape(str(label))} {series['index']}/{series['total']}"
         )
     if cta:
         start = max(duration - CTA_SECONDS, 0.0)

@@ -24,6 +24,7 @@ MAX_NARRATION_CHARS = 160
 MUSIC_MOODS = ("énergique", "calme", "épique", "drôle", "tendu", "mystérieux")
 MAX_EFFECTS = 4
 MAX_TRIM_START = 15.0  # secondes lentes coupables au début (ouverture directe)
+MAX_EXTEND_END = 10.0  # secondes ajoutables à la fin pour inclure la chute
 EFFECT_SPACING = 2.5  # secondes minimum entre deux effets (pas de surcharge)
 EFFECT_DURATIONS = {"flash": (0.1, 0.5), "shake": (0.3, 1.0)}
 
@@ -99,6 +100,10 @@ class EditorialPlan(BaseModel):
     # Phase 10 : secondes lentes à couper au début (la fin est prolongée d'autant).
     trim_start: float = 0.0
     trim_reason: str = ""
+    # Phase 11 : secondes à ajouter à la fin pour inclure la chute ; mot fort du titre.
+    extend_end: float = 0.0
+    extend_reason: str = ""
+    title_highlight: str = ""
 
 
 class TranslatedSentence(BaseModel):
@@ -162,6 +167,11 @@ def validate_plan(
     if plan.publication is not None:
         plan.publication = clean_publication(plan.publication)
     plan.trim_start = min(max(plan.trim_start, 0.0), MAX_TRIM_START)
+    plan.extend_end = min(max(plan.extend_end, 0.0), MAX_EXTEND_END)
+    if plan.title_highlight and normalize_text(plan.title_highlight) not in normalize_text(
+        plan.hook_text
+    ):
+        plan.title_highlight = ""  # doit être un morceau du titre
     return plan
 
 
@@ -328,7 +338,22 @@ accroche : si l'extrait commence ainsi, coupe jusqu'à la première réplique ou
 trim_reason : une phrase. La fin sera prolongée d'autant par le code (tu n'as rien à faire). \
 Tous tes autres temps (zooms, effets, narration) restent comptés depuis le début de l'extrait \
 fourni."""
-    rules = narration_rule + music_rule + effects_rule + suggest_rule + publication_rule + trim_rule
+    end_rule = f"""
+13. extend_end : la transcription peut se poursuivre APRÈS la fin de l'extrait (partie \
+« Suite immédiate »). Si la chute, la réaction ou la réplique qui conclut la scène s'y trouve, \
+donne le nombre de secondes à ajouter pour l'inclure (0 à {MAX_EXTEND_END:g}) ; 0 si la fin \
+actuelle conclut déjà. Une fin nette donne envie de revoir le short. extend_reason : une phrase.
+14. title_highlight : le mot ou groupe de mots le plus fort du titre (hook_text), recopié \
+exactement, qui sera affiché en couleur ; chaîne vide si aucun ne se détache."""
+    rules = (
+        narration_rule
+        + music_rule
+        + effects_rule
+        + suggest_rule
+        + publication_rule
+        + trim_rule
+        + end_rule
+    )
     return f"""Tu prépares le montage d'un short vertical (TikTok, YouTube Shorts) à partir \
 d'un extrait de vidéo de jeu déjà sélectionné. Profil : {profile_name}. Angle : \
 {focus or "moments forts compréhensibles sans contexte"}.
@@ -361,8 +386,10 @@ def editorial_content(
     sentences: list[Sentence],
     duration: float,
     offset: float,
+    after: list[Sentence] | None = None,
 ) -> list[dict[str, object]]:
     lines = "\n".join(f"[{_mmss(s.start)}–{_mmss(s.end)}] {s.text}" for s in sentences)
+    following = "\n".join(f"[{_mmss(s.start)}–{_mmss(s.end)}] {s.text}" for s in after or [])
     from app.analysis.judge import event_time_absolute
 
     rel = [
@@ -382,6 +409,12 @@ def editorial_content(
                 f"Pourquoi il a été retenu : {reason or 'non précisé'}\n"
                 f"Moments notables (temps depuis le début du short) :\n{moments or '- aucun'}\n\n"
                 f"Transcription (temps depuis le début du short) :\n{lines or '(aucune parole)'}"
+                + (
+                    "\n\nSuite immédiate de la vidéo, APRÈS la fin actuelle de l'extrait "
+                    f"(temps depuis le début du short) :\n{following}"
+                    if following
+                    else ""
+                )
             ),
         }
     ]

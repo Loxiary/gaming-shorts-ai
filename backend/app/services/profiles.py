@@ -107,6 +107,7 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         ),
         layout=profile.layout,
         jump_zoom=profile.jump_zoom,
+        progress_bar=profile.progress_bar,
         zoom_intensity=profile.zoom_intensity,
         hook_enabled=profile.hook_enabled,
         cta_enabled=profile.cta_enabled,
@@ -179,6 +180,7 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.subtitle_style_json = json.dumps(data.subtitle_style)
     profile.layout = data.layout
     profile.jump_zoom = data.jump_zoom
+    profile.progress_bar = data.progress_bar
     profile.zoom_intensity = data.zoom_intensity
     profile.hook_enabled = data.hook_enabled
     profile.cta_enabled = data.cta_enabled

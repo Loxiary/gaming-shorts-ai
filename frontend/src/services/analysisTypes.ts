@@ -22,6 +22,7 @@ export interface Profile {
   subtitle_style: SubtitleStyle;
   layout: "focus" | "blur" | "fill";
   jump_zoom: boolean;
+  progress_bar: boolean;
   zoom_intensity: number;
   hook_enabled: boolean;
   cta_enabled: boolean;

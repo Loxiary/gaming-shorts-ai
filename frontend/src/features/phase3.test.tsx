@@ -37,6 +37,7 @@ const profile: Profile = {
   },
   layout: "blur",
   jump_zoom: true,
+  progress_bar: true,
   zoom_intensity: 0.12,
   hook_enabled: true,
   cta_enabled: true,

@@ -107,6 +107,8 @@ def effects_chain(
     return ",".join(parts)
 
 
+PROGRESS_H = 10  # barre de progression (px)
+PROGRESS_COLOR = "0xFFD000"
 REACT_RING = 9  # épaisseur du contour jaune (px)
 REACT_RING_COLOR = "0xFFD000"
 REACT_MARGIN_X = 40  # depuis le bord DROIT
@@ -154,6 +156,7 @@ def filter_graph(
     effects: str = "",
     react: str = "",
     focus: str = "0.5",
+    progress: bool = False,
 ) -> str:
     """``crop`` : (x, y, w, h) normalisés appliqués à la source (exclusion du facecam).
     ``audio_input`` : 0 = audio de la vidéo, 1 = piste mixée fournie en 2e entrée.
@@ -210,6 +213,13 @@ def filter_graph(
             if react
             else ""
         )
+        + (
+            # Barre de progression : bande jaune qui entre depuis la gauche (tout en haut).
+            f"[prog];color=c={PROGRESS_COLOR}:s={OUT_W}x{PROGRESS_H}:r={fps:g}[pbar];"
+            f"[prog][pbar]overlay=x='-w+w*t/{duration:.3f}':y=0:eval=frame:shortest=1"
+            if progress
+            else ""
+        )
         + f",ass={ass_file}{fonts},format=yuv420p[v];"
         f"[{audio_input}:a]loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,afade=t=in:d=0.3,"
         f"afade=t=out:st={fade_out:.3f}:d=0.3,aresample=48000[a]"
@@ -243,6 +253,7 @@ def render_short(
     react: dict[str, Any] | None = None,
     focus: list[tuple[float, float]] | None = None,
     jumps: list[float] | None = None,
+    progress: bool = False,
 ) -> Path:
     """``react`` : facecam réaction (path absolu, cx, cy, zoom, diameter) ou None."""
     """``audio_file`` : piste mixée (relative au dossier de travail) remplaçant l'audio source."""
@@ -260,6 +271,7 @@ def render_short(
             duration=duration,
         ),
         focus=center_expression(focus or []),
+        progress=progress,
         ass_file=ass_name,
         duration=duration,
         crop=crop,

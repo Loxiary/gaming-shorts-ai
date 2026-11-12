@@ -2,7 +2,7 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 10 — rétention.** L'application importe des vidéos YouTube, les
+> **État actuel : Phase 11 — fin, progression, séries, titre.** L'application importe des vidéos YouTube, les
 > transcrit en local, détecte et note les meilleurs extraits (61–90 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
@@ -190,6 +190,19 @@ Réglages décidés avec l'utilisateur le 11/11/2026 :
 - **Ouverture directe** : l'IA peut couper jusqu'à 15 s lentes au début (salutations, trajet),
   calées sur un début de phrase ; la fin est prolongée d'autant jusqu'à une fin de phrase, dans
   la limite de 61–90 s. Décision laissée à l'IA, qui peut juger que le début accroche déjà.
+
+### Fin, progression, séries et titre (Phase 11)
+
+- **Fin complète** : l'IA voit les 15 s qui suivent l'extrait et peut prolonger la fin pour
+  inclure la chute (≤ 10 s) ; le code ne coupe jamais une phrase en cours et s'arrête juste
+  avant la réplique suivante (61–90 s au total).
+- **Barre de progression** jaune tout en haut de l'écran (désactivable par profil).
+- **Séries** : deux extraits **sélectionnés** qui se suivent dans la vidéo (écart ≤ 10 s)
+  forment une série « Partie i/N » : badge en haut à gauche, appel à l'action « Abonne-toi
+  pour voir la partie N+1 ! 🔔 » pour les parties non finales, « (Partie i/N) » dans les titres
+  de publication.
+- **Titre** : deux lignes équilibrées (jamais coupées dans le mot fort), taille maximale
+  calculée selon la longueur, mot fort choisi par l'IA en jaune, apparition animée.
 
 ### Facecam « réaction » (Phase 9)
 

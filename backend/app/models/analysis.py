@@ -66,6 +66,10 @@ class EditingProfile(Base):
     layout: Mapped[str] = mapped_column(
         String(20), nullable=False, default="focus", server_default="focus"
     )
+    # Barre de progression en haut de l'écran.
+    progress_bar: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     # Rythme : zoom franc qui alterne à chaque changement de phrase.
     jump_zoom: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"

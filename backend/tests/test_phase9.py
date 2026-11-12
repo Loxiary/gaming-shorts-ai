@@ -176,7 +176,8 @@ def test_render_reads_title_keeps_it_on_screen_and_prepares_publication(
         f"projects/{pid}/renders/{render['id']}/subtitles.ass"
     ).read_text(encoding="utf-8")
     end = f"{int(render['duration_seconds'] // 60)}:{render['duration_seconds'] % 60:05.2f}"
-    assert "Hook,,0,0,0,,{\\fad(150,0)}Une partie qui démarre fort" in ass
+    assert "Une partie qui\\Ndémarre fort" in ass  # titre sur deux lignes équilibrées
+    assert ",Hook,,0,0,0,,{\\fad(120,0)" in ass
     assert f",0:0{end}," in ass or end in ass
     assert render["audio_report"]["bleep"] == {"enabled": True, "count": 0, "times": []}
     assert render["audio_report"]["music"]["status"] == "disabled"  # conseillée, pas incrustée
