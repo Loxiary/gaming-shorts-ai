@@ -22,7 +22,7 @@ Sources des preuves :
 | 5 | L'analyse détecte des candidats avec explications | ✅ | Essai réel : 11 extraits proposés, résumé, raison, moments clés et avertissements par extrait |
 | 6 | Chaque candidat reçoit un score et ses critères | ✅ | 7 critères notés et justifiés, note globale pondérée par profil |
 | 7 | Le seuil est configurable | ✅ | Par profil, et réglable après coup sans nouvel appel à l'IA (« Appliquer le seuil ») |
-| 8 | Les clips générés respectent 61 à 180 s | ✅ | Fenêtres limitées à 61–180 s dès la détection ; contrôle qualité **critique** sur le fichier produit ; essais réels : 68 et 78 s |
+| 8 | Les clips générés respectent 61 à 180 s (90 s au plus depuis la Phase 8, à la demande de l'utilisateur) | ✅ | Fenêtres limitées à 61–90 s dès la détection ; contrôle qualité **critique** sur le fichier produit ; essais réels : 68 et 78 s |
 | 9 | Exports 9:16, 1080 × 1920, MP4 H.264/AAC | ✅ | Contrôle qualité critique (résolution, codecs, yuv420p, lecture complète) ; vérifié par ffprobe sur les rendus réels |
 | 10 | Fond flouté et recadrage facecam fonctionnent ou signalent leurs limites | ⚠️ | Fond flouté : ✅ sur rendus réels. Facecam : détection et recadrage testés sur détections simulées, **aucun faux positif sur 30 images réelles sans facecam** ; cas douteux et pertes > 35 % signalés. **Pas encore validé sur une vraie vidéo avec facecam** |
 | 11 | Les sous-titres sont synchronisés | ✅ | Mots horodatés par Whisper, mot prononcé surligné ; vérifié visuellement sur rendu réel |

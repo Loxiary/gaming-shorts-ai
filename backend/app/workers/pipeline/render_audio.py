@@ -20,10 +20,11 @@ import numpy as np
 from sqlalchemy import select
 
 from app.audio import mix
-from app.models import MusicTrack
+from app.models import MusicTrack, Project
 from app.models_registry import PIPER_VOICES
 from app.render import editorial as ed
 from app.render.facecam import Face, analyze_detections
+from app.render.profanity import censor_text
 from app.workers.context import StepContext
 from app.workers.errors import StepError
 from app.workers.pipeline.render import (
@@ -43,6 +44,12 @@ MUSIC_MIN_RATIO = 0.1  # musique sur au moins 10 % des secondes → considérée
 FACECAM_FRAMES = 10
 DUCK_GAME_UNDER_NARRATION_DB = 9.0
 DUCK_MUSIC_UNDER_VOICE_DB = 8.0
+TITLE_VOICE_START = 0.2  # la voix lit le titre dès l'ouverture
+BLEEP_PAD = 0.04  # marge autour du mot couvert par le bip (horodatage Whisper approximatif)
+
+
+def has_profanity(text: str) -> bool:
+    return censor_text(text)[1] > 0
 
 
 def _toolkit(ctx: StepContext):  # type: ignore[no-untyped-def]
@@ -233,29 +240,58 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
                 )
     music_kept = source_music["status"] == "detected" and not source_music["attenuated"]
 
-    # 2. Narration ---------------------------------------------------------------------
+    # 2. Narration : titre lu au début, puis lignes de l'IA dans les silences ------------
     nmode = profile.get("narration_mode", "auto")
     narration_info: dict[str, Any] = {"mode": nmode, "status": "disabled", "lines": []}
     voice_track = np.zeros((2, n), dtype=np.float32)
     narration_iv: list[tuple[float, float]] = []
+    title = plan.hook_text.strip()
+    want_title = bool(profile.get("narration_title", True) and title and engine == "llm")
+    want_lines = bool(engine == "llm" and plan.narration_needed and plan.narration)
     if nmode == "auto":
-        if engine != "llm":
+        voice = None
+        if want_title or want_lines:
+            if tk is None:
+                narration_info["status"] = "unavailable"
+                notes.append("Synthèse vocale indisponible : narration abandonnée.")
+            else:
+                voice, note = _voice_for(profile, tk)
+                if note:
+                    notes.append(note)
+                if voice is None:
+                    narration_info["status"] = "unavailable"
+        elif engine != "llm":
             narration_info["status"] = "skipped"
             notes.append("Plan sans IA : pas de narration (aucun texte factuel vérifiable).")
-        elif not (plan.narration_needed and plan.narration):
-            narration_info.update(status="not_needed", reason=plan.narration_reason)
-        elif tk is None:
-            narration_info["status"] = "unavailable"
-            notes.append("Synthèse vocale indisponible : narration abandonnée.")
         else:
-            voice, note = _voice_for(profile, tk)
-            if note:
-                notes.append(note)
-            if voice is None:
-                narration_info["status"] = "unavailable"
-            else:
-                ctx.report_progress(0.7, "Synthèse de la narration…")
-                speed = float(profile.get("narration_speed", 1.0))
+            narration_info.update(status="not_needed", reason=plan.narration_reason)
+        if voice is not None:
+            ctx.report_progress(0.7, "Synthèse de la narration…")
+            speed = float(profile.get("narration_speed", 1.0))
+
+            def put(path: Path, t: float) -> None:
+                audio = mix.read_audio(path)
+                a0 = int(t * sr)
+                seg = audio[:, : max(0, min(audio.shape[1], n - a0))]
+                voice_track[:, a0 : a0 + seg.shape[1]] += seg
+
+            busy = list(speech)
+            if want_title and not has_profanity(title):
+                # Lecture du titre en ouverture : seule intervention autorisée sur la parole
+                # d'origine (le jeu est baissé dessous), car elle présente le short.
+                out = tk.tts().synthesize(
+                    title, voice, workdir / "narration" / "title.wav", speed=speed
+                )
+                put(out.path, TITLE_VOICE_START)
+                iv = (TITLE_VOICE_START, TITLE_VOICE_START + out.duration)
+                narration_iv.append(iv)
+                busy.append(iv)
+                narration_info["title"] = {"text": title, "duration": round(out.duration, 2)}
+            elif want_title:
+                notes.append("Titre non lu : il contient un mot grossier masqué.")
+            placed: list[mix.PlacedLine] = []
+            dropped: list[str] = []
+            if want_lines:
                 spoken: list[tuple[float, float, str]] = []
                 paths: dict[str, Path] = {}
                 for i, line in enumerate(plan.narration):
@@ -265,39 +301,57 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
                     )
                     spoken.append((line.t, out.duration, line.text))
                     paths[line.text] = out.path
-                placed, dropped = mix.place_narration(spoken, speech, duration)
-                for p in placed:
-                    audio = mix.read_audio(paths[p.text])
-                    a = int(p.t * sr)
-                    seg = audio[:, : max(0, min(audio.shape[1], n - a))]
-                    voice_track[:, a : a + seg.shape[1]] += seg
-                    narration_iv.append((p.t, p.t + p.duration))
-                narration_info.update(
-                    status="added" if placed else "dropped",
-                    voice=voice,
-                    reason=plan.narration_reason,
-                    lines=[
-                        {
-                            "t": round(p.t, 2),
-                            "duration": round(p.duration, 2),
-                            "text": p.text,
-                            "moved": p.moved,
-                        }
-                        for p in placed
-                    ],
-                    dropped=dropped,
+                placed, dropped = mix.place_narration(
+                    spoken, mix.merge_intervals(busy, gap=0), duration
                 )
-                if dropped:
-                    notes.append(
-                        f"{len(dropped)} ligne(s) de narration abandonnée(s) : aucun silence "
-                        "assez long pour ne pas couvrir la parole d'origine."
-                    )
-                credit = PIPER_VOICES[voice].credit
-                if placed and credit:
-                    credits.append({"kind": "voice", "text": credit})
+                for pl in placed:
+                    put(paths[pl.text], pl.t)
+                    narration_iv.append((pl.t, pl.t + pl.duration))
+            spoke = bool(placed) or "title" in narration_info
+            narration_info.update(
+                status="added" if spoke else "dropped" if dropped else "not_needed",
+                voice=voice,
+                reason=plan.narration_reason,
+                lines=[
+                    {
+                        "t": round(pl.t, 2),
+                        "duration": round(pl.duration, 2),
+                        "text": pl.text,
+                        "moved": pl.moved,
+                    }
+                    for pl in placed
+                ],
+                dropped=dropped,
+            )
+            if dropped:
+                notes.append(
+                    f"{len(dropped)} ligne(s) de narration abandonnée(s) : aucun silence "
+                    "assez long pour ne pas couvrir la parole d'origine."
+                )
+            credit = PIPER_VOICES[voice].credit
+            if spoke and credit:
+                credits.append({"kind": "voice", "text": credit})
+
+    # 2 bis. Bip sur les mots grossiers prononcés (horodatage des mots de la transcription).
+    bleeps: list[tuple[float, float]] = []
+    if profile.get("bleep_profanity", True):
+        bleeps = [
+            (max(a0 - BLEEP_PAD, 0.0), min(b0 + BLEEP_PAD, duration))
+            for s_ in sentences
+            for (a0, b0, w) in s_.words
+            if has_profanity(w)
+        ]
+        if bleeps:
+            game = game * mix.envelope(n, sr, bleeps, 60.0, ramp=0.01)
+            game = game + mix.beep_track(bleeps, n, sr)
+    bleep_info = {
+        "enabled": bool(profile.get("bleep_profanity", True)),
+        "count": len(bleeps),
+        "times": [round(x, 2) for x, _ in bleeps],
+    }
 
     # 3. Musique ajoutée ---------------------------------------------------------------
-    mmode = profile.get("music_mode", "library")
+    mmode = profile.get("music_mode", "suggest")
     music_info: dict[str, Any] = {"mode": mmode, "status": "disabled"}
     music_track = np.zeros((2, n), dtype=np.float32)
     if mmode == "library":
@@ -380,6 +434,7 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
         "narration": narration_info,
         "music": music_info,
         "sfx": sfx_info,
+        "bleep": bleep_info,
         "levels": {
             "game_db": float(profile.get("game_level_db", 0.0)),
             "narration_db": float(profile.get("narration_level_db", 0.0)),
@@ -404,6 +459,43 @@ def preparing_audio(ctx: StepContext) -> dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- publication
+
+
+def preparing_publication(ctx: StepContext) -> dict[str, Any]:
+    """Textes prêts à copier pour TikTok et YouTube Shorts, avec les crédits obligatoires
+    (ajoutés par le code, jamais laissés à l'IA) et la musique conseillée pour l'upload."""
+    from app.services.publication import build_publication
+
+    with ctx.session_factory() as s:
+        r = _render(ctx, s)
+        source = _source(ctx, s)
+        plan = ed.EditorialPlan.model_validate_json(r.plan_json or "{}")
+        profile = json.loads(r.profile_snapshot_json)
+        cand = json.loads(r.candidate_snapshot_json) if r.candidate_snapshot_json else {}
+        project_game = r.project_id and s.get(Project, r.project_id)
+        pub = build_publication(
+            plan=plan,
+            source={
+                "title": source.title,
+                "uploader": source.uploader,
+                "url": source.url,
+                "rights_status": source.rights_status,
+            },
+            credits=json.loads(r.credits_json) if r.credits_json else [],
+            candidate_summary=cand.get("summary"),
+            game=project_game.game if project_game else None,
+            censor=bool(profile.get("censor_profanity", True)),
+        )
+        r.publication_json = json.dumps(pub, ensure_ascii=False)
+        s.commit()
+    return {
+        "youtube_title": pub["youtube"]["title"],
+        "hashtags": pub["hashtags"],
+        "music_suggestion": bool(pub["music_suggestion"]),
+    }
+
+
 # Ordre complet : l'audio précède les sous-titres (la narration placée y est sous-titrée).
 RENDER_STEPS = {
     "creating_editorial_plan": creating_editorial_plan,
@@ -413,4 +505,5 @@ RENDER_STEPS = {
     "rendering": rendering,
     "quality_check": quality_checking,
     "building_risk_report": building_risk_report,
+    "preparing_publication": preparing_publication,
 }

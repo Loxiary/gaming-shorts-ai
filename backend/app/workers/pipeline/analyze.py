@@ -494,7 +494,7 @@ def _save_assessment(
                 "l'extrait garde ses bornes initiales."
             )
     if not assessment.self_contained:
-        warnings.append("Peut nécessiter du contexte pour être compris (estimation).")
+        warnings.append("Contexte à préciser dans la description de publication (estimation).")
     c.status = result_status
     c.summary = assessment.summary
     c.reason = assessment.reason

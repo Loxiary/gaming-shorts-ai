@@ -46,11 +46,15 @@ class ProfileIn(BaseModel):
     narration_speed: float = Field(default=1.0, ge=0.7, le=1.4)
     narration_level_db: float = Field(default=0.0, ge=-20, le=10)
     game_level_db: float = Field(default=0.0, ge=-30, le=10)
-    music_mode: Literal["library", "off"] = "library"
+    music_mode: Literal["suggest", "library", "off"] = "suggest"
     music_level_db: float = Field(default=-18.0, ge=-40, le=0)
     source_music_mode: Literal["attenuate", "detect", "off"] = "attenuate"
     source_music_reduction_db: float = Field(default=15.0, ge=3, le=40)
     facecam_mode: Literal["crop", "off"] = "crop"
+    censor_profanity: bool = True
+    bleep_profanity: bool = True
+    narration_title: bool = True
+    min_confidence: float = Field(default=0.5, ge=0, le=1)
     # --- Transitions et effets ponctuels (Phase 7)
     effects_mode: Literal["auto", "off"] = "auto"
     transition_in: Literal["none", "fade", "zoom"] = "zoom"
@@ -143,6 +147,10 @@ class ProfileOut(BaseModel):
     source_music_mode: str
     source_music_reduction_db: float
     facecam_mode: str
+    censor_profanity: bool
+    bleep_profanity: bool
+    narration_title: bool
+    min_confidence: float
     effects_mode: str
     transition_in: str
     transition_out: str

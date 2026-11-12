@@ -55,14 +55,16 @@ class _Copy(FakeDownloader):
         return dest_dir / "source.mp4"
 
 
-def _worker(settings: Settings, sf: sessionmaker[Session], video: Path, editor) -> Worker:  # type: ignore[no-untyped-def]
+def _worker(
+    settings: Settings, sf: sessionmaker[Session], video: Path, editor, language="fr"
+) -> Worker:  # type: ignore[no-untyped-def]
     return Worker(
         settings,
         sf,
         Adapters(
             downloader=_Copy(video),
             media=FfmpegTool(),
-            transcriber=SpeechTranscriber(SECONDS),
+            transcriber=SpeechTranscriber(SECONDS, language),
             judge=FakeJudge(score=8),
             editor=editor,
         ),
@@ -83,8 +85,10 @@ def _candidate(client: TestClient, worker: Worker) -> tuple[str, dict]:
 def _render(client: TestClient, worker: Worker, candidate_id: str) -> dict:
     r = client.post(f"/api/candidates/{candidate_id}/renders", json={})
     assert r.status_code == 201, r.text
-    worker.run_once()
-    return client.get(f"/api/renders/{r.json()['id']}").json()
+    created = r.json()["created"]
+    for _ in created:
+        worker.run_once()
+    return client.get(f"/api/renders/{created[0]['id']}").json()
 
 
 def _profile_update(client: TestClient, **changes: object) -> None:
@@ -119,7 +123,7 @@ def test_full_render_qc_and_confirmed_export(
     assert (probe.width, probe.height) == (1080, 1920)
     assert probe.video_codec == "h264" and probe.audio_codec == "aac"
     assert abs(probe.duration_seconds - render["duration_seconds"]) < 0.25
-    assert 61 <= probe.duration_seconds <= 180
+    assert 61 <= probe.duration_seconds <= 90
 
     risk = render["risk_report"]
     assert risk["blocking"] is False and risk["reused_content"]["level"] == "élevé"
@@ -160,32 +164,43 @@ def test_translation_and_profile_settings(
     client: TestClient, fast_settings: Settings, session_factory: sessionmaker[Session], video: Path
 ) -> None:
     editor = FakeEditor(hook_kind="original")
-    worker = _worker(fast_settings, session_factory, video, editor)
+    # Source en ANGLAIS : une version anglaise (VO) et une version française (traduite).
+    worker = _worker(fast_settings, session_factory, video, editor, language="en")
     _, cand = _candidate(client, worker)
-    # Transcription simulée en « fr » : traduction vers l'anglais demandée.
     _profile_update(
         client,
-        subtitle_mode="translate",
-        output_language="en",
         layout="fill",
         cta_enabled=False,
         subtitle_style={"font": "Impact", "max_words": 2},
     )
-    render = _render(client, worker, cand["id"])
-    assert render["job_status"] == "completed", render["job_error"]
-    assert render["subtitles_are_translation"] is True and render["subtitle_language"] == "en"
-    assert render["subtitles"][0]["text"].startswith("Phrase")
-    assert render["plan"]["cta_text"] == ""
-    assert editor.calls == ["EditorialPlan", "Translation"]
+    r = client.post(f"/api/candidates/{cand['id']}/renders", json={})
+    created = r.json()["created"]
+    assert [c["audience_language"] for c in created] == ["en", "fr"]
+    worker.run_once()
+    worker.run_once()
+    en, fr = (client.get(f"/api/renders/{c['id']}").json() for c in created)
+    for render in (en, fr):
+        assert render["job_status"] == "completed", render["job_error"]
+        assert render["plan"]["cta_text"] == ""
+    assert en["subtitles_are_translation"] is False and en["subtitle_language"] == "en"
+    assert fr["subtitles_are_translation"] is True and fr["subtitle_language"] == "fr"
+    assert fr["subtitles"][0]["text"].startswith("Phrase")
+    assert editor.calls == ["EditorialPlan", "EditorialPlan", "Translation"]
+    assert "en anglais" in editor.systems[0] and "en français" in editor.systems[1]
+    # Une seule demande à la fois par public : le doublon est refusé.
+    client.post(f"/api/candidates/{cand['id']}/renders", json={})
+    assert client.post(f"/api/candidates/{cand['id']}/renders", json={}).status_code == 409
 
 
 def test_without_ai_uses_fallback_plan(
     client: TestClient, fast_settings: Settings, session_factory: sessionmaker[Session], video: Path
 ) -> None:
-    worker = _worker(fast_settings, session_factory, video, editor=None)
+    worker = _worker(fast_settings, session_factory, video, editor=None, language="en")
     _, cand = _candidate(client, worker)
-    _profile_update(client, subtitle_mode="translate", output_language="en")
-    render = _render(client, worker, cand["id"])
+    r = client.post(f"/api/candidates/{cand['id']}/renders", json={}).json()["created"]
+    worker.run_once()
+    worker.run_once()
+    render = client.get(f"/api/renders/{r[1]['id']}").json()  # version française
     assert render["job_status"] == "completed", render["job_error"]
     assert render["plan_engine"] == "fallback"
     assert render["plan"]["hook_kind"] == "quote"
@@ -220,7 +235,8 @@ def test_render_guards(
     assert dup.status_code == 409  # même extrait déjà en file
     # Un rendu non terminé ne peut pas être exporté.
     r = client.post(
-        f"/api/renders/{first.json()['id']}/confirm-export", json={"acknowledged": True}
+        f"/api/renders/{first.json()['created'][0]['id']}/confirm-export",
+        json={"acknowledged": True},
     )
     assert r.status_code == 409
     assert client.post("/api/candidates/inexistant/renders", json={}).status_code == 404

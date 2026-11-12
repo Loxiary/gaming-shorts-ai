@@ -7,12 +7,18 @@ import { errorMessage } from "../../services/api";
 import { formatBytes, formatDate, formatTimecode } from "../../services/format";
 import { useJob } from "../../services/queries";
 import { RenderAudioView } from "../audio/RenderAudioView";
+import { MusicBanner, PublicationView } from "./PublicationView";
 import {
   type Render,
   type RiskReport,
   useConfirmExport,
   useDeleteRender,
 } from "../../services/renderApi";
+
+const AUDIENCE_LABELS: Record<string, string> = {
+  fr: "Version française",
+  en: "English version",
+};
 
 const LEVEL_CLASS: Record<string, string> = {
   faible: "badge-completed",
@@ -30,7 +36,7 @@ export function RenderCard({ render: r }: { render: Render }) {
   const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [tab, setTab] = useState<"plan" | "qc" | "risk" | "audio">("risk");
+  const [tab, setTab] = useState<"plan" | "qc" | "risk" | "audio" | "pub">("risk");
   const currentStep = job.data?.steps.find((s) => s.status === "running");
 
   return (
@@ -54,6 +60,11 @@ export function RenderCard({ render: r }: { render: Render }) {
         <header className="page-header">
           <h3>
             Short {formatTimecode(r.start_seconds)} → {formatTimecode(r.end_seconds)}{" "}
+            {r.audience_language && (
+              <span className="badge badge-demo" title="Public visé">
+                {AUDIENCE_LABELS[r.audience_language] ?? r.audience_language}
+              </span>
+            )}{" "}
             <span className="muted">({Math.round(r.duration_seconds)} s)</span>
           </h3>
           <div className="candidate-badges">
@@ -92,11 +103,13 @@ export function RenderCard({ render: r }: { render: Render }) {
           </>
         )}
         {r.job_error && <p className="job-error">{r.job_error}</p>}
+        {r.publication?.music_suggestion && <MusicBanner music={r.publication.music_suggestion} />}
 
         {(r.plan || r.qc || r.risk_report) && (
           <div className="filters" role="tablist" aria-label="Détails du short">
             {(
               [
+                ["pub", "Publication"],
                 ["risk", "Rapport de risques"],
                 ["audio", "Audio et facecam"],
                 ["qc", "Contrôle qualité"],
@@ -120,7 +133,7 @@ export function RenderCard({ render: r }: { render: Render }) {
         {tab === "plan" && r.plan && (
           <dl className="details">
             <div>
-              <dt>Accroche</dt>
+              <dt>Titre (affiché et lu)</dt>
               <dd>
                 {r.plan.hook_text || "—"}{" "}
                 {r.plan.hook_text && (
@@ -186,6 +199,12 @@ export function RenderCard({ render: r }: { render: Render }) {
         )}
 
         {tab === "risk" && r.risk_report && <RiskReportView report={r.risk_report} />}
+        {tab === "pub" &&
+          (r.publication ? (
+            <PublicationView pub={r.publication} />
+          ) : (
+            <p className="muted">Textes de publication non disponibles pour ce rendu.</p>
+          ))}
         {tab === "audio" && (
           <RenderAudioView
             audio={r.audio_report}

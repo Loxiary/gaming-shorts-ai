@@ -29,7 +29,7 @@ DEFAULT_PROFILES = [
         "description": "Moments forts au potentiel de partage maximal.",
         "editorial_focus": "Privilégier les moments surprenants ou spectaculaires, avec une "
         "accroche immédiate dans les premières secondes et une chute nette.",
-        "threshold": 65.0,
+        "threshold": 55.0,
         "weights": _w(hook=1.6, retention=1.5, entertainment=1.3, av_quality=0.7, narrative=0.8),
         "is_default": True,
     },
@@ -38,7 +38,7 @@ DEFAULT_PROFILES = [
         "description": "Situations drôles, réactions, échecs comiques.",
         "editorial_focus": "Privilégier l'humour : réactions spontanées, échecs comiques, "
         "situations absurdes. La chute doit être comprise sans contexte.",
-        "threshold": 60.0,
+        "threshold": 50.0,
         "weights": _w(entertainment=1.6, standalone=1.3, hook=1.2, av_quality=0.7),
     },
     {
@@ -46,7 +46,7 @@ DEFAULT_PROFILES = [
         "description": "Poursuites, fusillades, cascades.",
         "editorial_focus": "Privilégier l'intensité : poursuites, combats, cascades, "
         "retournements de situation. Le rythme compte plus que les dialogues.",
-        "threshold": 60.0,
+        "threshold": 50.0,
         "weights": _w(entertainment=1.6, av_quality=1.2, hook=1.2, narrative=0.8),
     },
     {
@@ -54,7 +54,7 @@ DEFAULT_PROFILES = [
         "description": "Ambiance, beauté du jeu, exploration.",
         "editorial_focus": "Privilégier l'ambiance et la qualité visuelle : panoramas, "
         "atmosphère, moments contemplatifs qui donnent envie de jouer.",
-        "threshold": 55.0,
+        "threshold": 50.0,
         "weights": _w(av_quality=1.6, originality=1.2, narrative=1.0, hook=0.8, entertainment=0.8),
     },
     {
@@ -62,7 +62,7 @@ DEFAULT_PROFILES = [
         "description": "Séquences narratives compréhensibles seules.",
         "editorial_focus": "Privilégier les séquences avec un début, un développement et une "
         "fin : mini-récits, missions, rebondissements compréhensibles sans contexte.",
-        "threshold": 55.0,
+        "threshold": 50.0,
         "weights": _w(narrative=1.7, standalone=1.5, hook=1.0, entertainment=0.9),
     },
 ]
@@ -121,6 +121,10 @@ def to_out(profile: EditingProfile) -> ProfileOut:
         source_music_mode=profile.source_music_mode,
         source_music_reduction_db=profile.source_music_reduction_db,
         facecam_mode=profile.facecam_mode,
+        censor_profanity=profile.censor_profanity,
+        min_confidence=profile.min_confidence,
+        narration_title=profile.narration_title,
+        bleep_profanity=profile.bleep_profanity,
         effects_mode=profile.effects_mode,
         transition_in=profile.transition_in,
         transition_out=profile.transition_out,
@@ -187,6 +191,10 @@ def _apply(profile: EditingProfile, data: ProfileIn) -> None:
     profile.source_music_mode = data.source_music_mode
     profile.source_music_reduction_db = data.source_music_reduction_db
     profile.facecam_mode = data.facecam_mode
+    profile.censor_profanity = data.censor_profanity
+    profile.min_confidence = data.min_confidence
+    profile.narration_title = data.narration_title
+    profile.bleep_profanity = data.bleep_profanity
     profile.effects_mode = data.effects_mode
     profile.transition_in = data.transition_in
     profile.transition_out = data.transition_out

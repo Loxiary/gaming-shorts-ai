@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.render import editorial as ed
 from app.render.ffmpeg_render import quality_check, render_short
+from app.render.profanity import censor_text
 from app.render.risk import build_risk_report
 from app.render.style import normalize_subtitle_style
 from app.render.subtitles import Cue, build_ass, cues_from_translation, cues_from_words
@@ -189,8 +190,10 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
                     profile.get("name", ""),
                     profile.get("cta_text"),
                     narration=profile.get("narration_mode", "auto") == "auto",
-                    music=profile.get("music_mode", "library") == "library",
+                    music=profile.get("music_mode", "suggest") == "library",
                     effects=profile.get("effects_mode", "auto") == "auto",
+                    music_suggest=profile.get("music_mode", "suggest") == "suggest",
+                    publication=True,
                 ),
                 content=ed.editorial_content(
                     cand.get("summary"),
@@ -231,6 +234,17 @@ def creating_editorial_plan(ctx: StepContext) -> dict[str, Any]:
         plan.cta_text = ""
     if profile.get("effects_mode", "auto") != "auto":
         plan.effects = []
+    if profile.get("music_mode", "suggest") != "suggest":
+        plan.music_suggestion = None
+    if profile.get("censor_profanity", True):
+        # Dès le plan : le titre est aussi lu par la voix (étape audio, avant les sous-titres).
+        plan.hook_text, n_hook = censor_text(plan.hook_text)
+        plan.cta_text, n_cta = censor_text(plan.cta_text)
+        if n_hook + n_cta:
+            plan.warnings.append(
+                f"{n_hook + n_cta} mot(s) grossier(s) masqué(s) dans le titre ou l'appel à "
+                "l'action."
+            )
     if note:
         plan.warnings.append(note)
 
@@ -303,6 +317,19 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
 
     if mode != "off":
         cues = _with_narration(cues, narration_lines, style["max_words"], duration)
+    censored = 0
+    if profile.get("censor_profanity", True):
+        cues, censored = _censor_cues(cues)
+        plan.keywords = [k for k in plan.keywords if not censor_text(k)[1]]
+        if censored:
+            notes.append(
+                f"{censored} mot(s) grossier(s) masqué(s) dans les textes affichés"
+                + (
+                    " et couvert(s) d'un bip."
+                    if profile.get("bleep_profanity", True)
+                    else " (audio d'origine non modifié)."
+                )
+            )
     keywords = ed.filter_keywords(plan.keywords, [w for c in cues for (_, _, w) in c.words])
     ass = build_ass(
         cues=cues,
@@ -326,11 +353,24 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         s.commit()
     return {
         "mode": mode,
+        "censored_words": censored,
         "cues": len(cues),
         "language": language,
         "translated": translated,
         "keywords": keywords,
     }
+
+
+def _censor_cues(cues: list[Cue]) -> tuple[list[Cue], int]:
+    count = 0
+    for cue in cues:
+        words = []
+        for a, b, w in cue.words:
+            masked, n = censor_text(w)
+            count += n
+            words.append((a, b, masked))
+        cue.words = words
+    return cues, count
 
 
 def _with_narration(

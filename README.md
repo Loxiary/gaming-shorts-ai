@@ -2,8 +2,8 @@
 
 Application locale (Windows 11) destinée à transformer des vidéos longues de gameplay en shorts verticaux.
 
-> **État actuel : Phase 7 — transitions et effets ponctuels.** L'application importe des vidéos YouTube, les
-> transcrit en local, détecte et note les meilleurs extraits (61–180 s), puis **monte des shorts
+> **État actuel : Phase 8 — titre, voix, publication.** L'application importe des vidéos YouTube, les
+> transcrit en local, détecte et note les meilleurs extraits (61–90 s), puis **monte des shorts
 > verticaux 1080×1920 H.264/AAC** (fond flouté, sous-titres animés mot à mot ou traduits,
 > accroche, appel à l'action, zooms). En local et sans coût supplémentaire, elle **détecte et
 > atténue la musique d'origine** (voix conservées), ajoute si l'IA la juge utile une **narration
@@ -84,7 +84,7 @@ images réduites de chaque candidat.
 | `preparing_proxy` | Copie légère H.264 480p 10 i/s (décodage AV1 matériel NVIDIA si possible), réutilisée |
 | `detecting_scenes` | Changements de scène (filtre FFmpeg `scdet`), stockés par source et réutilisés |
 | `analyzing_audio` | Énergie sonore relative, débit de parole, densité de coupes → courbe d'« intérêt » par seconde |
-| `generating_candidates` | Fenêtres de 61 à 180 s (bornes du profil) autour des pics, calées en priorité sur des **phrases complètes** (ponctuation des mots horodatés), doublons éliminés ; vidéo trop courte → aucun extrait, avec une note |
+| `generating_candidates` | Fenêtres de 61 à 90 s (bornes du profil) autour des pics, calées en priorité sur des **phrases complètes** (ponctuation des mots horodatés), doublons éliminés ; vidéo trop courte → aucun extrait, avec une note |
 | `sampling_frames` | ~8 images horodatées par extrait (début, pics d'intérêt et sonores, répartition) |
 | `scoring_candidates` | **IA** (Claude Sonnet 5.5, sortie JSON validée, une relance si invalide) ou **signaux seuls** (gratuit, confiance 25 %, clairement signalé). Un extrait déjà évalué n'est jamais renvoyé à l'IA lors d'une reprise |
 | `selecting_clips` | Note globale = moyenne pondérée (profil) ×10 ; seuil ; chevauchements > 30 % retirés |
@@ -115,8 +115,8 @@ file ; un même extrait ne peut pas être monté deux fois en parallèle.
 | `detecting_facecam` | 10 images de l'extrait, détecteur de visages YuNet (position seulement, aucune reconnaissance d'identité). Un visage **au même endroit, près d'un bord, sur ≥ 50 % des images** = facecam : recadrage du côté qui retire le moins d'image (avertissement au-delà de 35 %). Cas douteux (25–50 %, visage central) : signalé, sans recadrage |
 | `preparing_audio` | Musique d'origine détectée seconde par seconde (PANNs CNN14, classe « Music »), puis atténuée par **séparation de sources** (Demucs htdemucs, processeur) : voix intactes, autres sources baissées de N dB pendant la musique, musique résiduelle re-mesurée. Narration Piper (voix du profil, langue vérifiée), décalée dans un silence si elle couvre la parole, sinon abandonnée. Musique de la bibliothèque (licence confirmée uniquement), bouclée, avec fondus. Ducking calé sur les horodatages connus (parole, narration). Aperçu audio AAC au niveau final, écoutable dès cette étape |
 | `preparing_subtitles` | Sous-titres ASS : 1 à 6 mots par groupe, mot prononcé surligné, mots clés en couleur ; la narration ajoutée est aussi sous-titrée. Mode « traduire » : traduction IA phrase par phrase, **stockée à part et affichée comme traduction** (la transcription source n'est jamais modifiée) |
-| `rendering` | FFmpeg : recadrage facecam éventuel, transitions (zoom d'ouverture ou fondu, fondu au noir final) et effets ponctuels (flash, tremblement) appliqués **avant** les textes, qui restent nets, gameplay centré sur fond flouté (ou plein cadre), zooms, accroche (3 premières s) et appel à l'action (4 dernières s) en haut de l'écran, piste mixée normalisée à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
-| `quality_check` | Fichier réellement produit : présence, **durée 61–180 s**, 1080×1920, H.264, yuv420p, AAC, lecture complète sans erreur (critiques) ; durée attendue, synchronisation A/V, cadence, volume, saturation (avertissements) |
+| `rendering` | FFmpeg : recadrage facecam éventuel, transitions (zoom d'ouverture ou fondu, fondu au noir final) et effets ponctuels (flash, tremblement) appliqués **avant** les textes, qui restent nets, gameplay centré sur fond flouté (ou plein cadre), zooms, **titre en gros en haut pendant toute la vidéo**, appel à l'action en bas (4 dernières s), piste mixée normalisée à -14 LUFS, H.264/AAC (libx264 ou NVENC) |
+| `quality_check` | Fichier réellement produit : présence, **durée 61–90 s**, 1080×1920, H.264, yuv420p, AAC, lecture complète sans erreur (critiques) ; durée attendue, synchronisation A/V, cadence, volume, saturation (avertissements) |
 | `building_risk_report` | Source et créateur, droits déclarés, transformation éditoriale (narration et musique comprises), risque de « contenu réutilisé », musique d'origine (absente / atténuée / encore détectable / conservée / non analysée), facecam (exclu / absent / incertain / non vérifié), **crédits à publier** (voix CC BY, musique), avertissements de l'IA, recommandations — **jamais bloquant** |
 
 Un modèle absent ne fait jamais échouer le montage : la fonction est sautée et le rapport le dit.
@@ -139,6 +139,43 @@ morceau renseignez titre, artiste, **licence**, source, ambiances, et cochez la 
 d'autorisation. Seuls ces morceaux sont choisis (selon l'ambiance proposée par l'IA) et leur
 crédit est ajouté au rapport et à la fiche d'export. Aucune musique n'est ajoutée par-dessus une
 musique d'origine conservée.
+
+### Titre, voix, censure, musique conseillée et publication (Phase 8)
+
+Réglages décidés avec l'utilisateur le 11/11/2026 :
+
+- **Versions par public** : si la vidéo source n'est pas en français (langue détectée par la
+  transcription), chaque montage produit **deux shorts** : une version **anglaise** (titre, voix
+  « Joe », sous-titres, appel à l'action et textes de publication en anglais ; sous-titres en VO
+  si la source est anglaise, traduits sinon) et une version **française** (titre, voix « SIWIS »
+  et sous-titres traduits en français). Source en français : une seule version française. La
+  langue du profil ne décide plus de la langue des shorts (elle reste celle des explications de
+  l'analyse). Le fichier exporté porte le suffixe `_en` ou `_fr`.
+- **Durée des shorts : 61 à 90 s** (1 min 30 au plus ; 180 s auparavant). Un extrait analysé
+  avant ce changement et plus long est refusé au montage : relancer l'analyse.
+- **Titre** : l'IA rédige un titre aguicheur mais honnête (50 caractères au plus) qui dit ce que
+  contient le short ; il reste affiché en gros en haut **pendant toute la vidéo**.
+- **Voix** : elle lit le titre en ouverture (le jeu est baissé dessous) ; ses autres interventions
+  (contexte, enjeu, réaction) ne se placent que dans les silences, ne répètent jamais les
+  dialogues ni les sous-titres, et sont abandonnées s'il n'y a pas de place.
+- **Mots grossiers** : masqués dans tous les textes affichés (« pu**** ») et couverts d'un **bip**
+  à 1 kHz à l'instant où ils sont prononcés (horodatage Whisper ±40 ms). Réglables par profil.
+- **Notation** : les grossièretés, l'interface du jeu, les cinématiques, le filigrane de la chaîne
+  source, une transcription lacunaire et un contexte manquant ne baissent plus les notes. En
+  revanche l'identité visuelle d'**autres** créateurs (facecam, logo ou pseudo d'une autre
+  chaîne) les baisse et est signalée. Seuils par défaut : 55 (Viral), 50 (autres profils), et
+  **confiance minimale 0,5** (un extrait noté par l'IA avec moins de confiance n'est pas
+  sélectionné ; ne s'applique pas au mode « signaux seuls »).
+- **Musique** : par défaut, **aucune musique n'est incrustée**. Un bandeau indique l'ambiance, le
+  genre, le tempo et des mots-clés à chercher dans la bibliothèque sonore de TikTok ou de YouTube
+  au moment de l'upload : ces morceaux sont sous licence pour la plateforme à condition d'y être
+  ajoutés dans son éditeur (un compte professionnel TikTok est limité à la « Commercial Music
+  Library »). L'IA ne cite aucun titre précis, faute de pouvoir vérifier sa disponibilité. La
+  bibliothèque locale (musique incrustée) reste disponible par profil.
+- **Publication** (onglet du short, boutons « Copier ») : légende TikTok, titre et description
+  YouTube Shorts, ton décontracté gaming, contexte de la scène, question aux spectateurs, 3 à 5
+  hashtags. **Les crédits obligatoires sont ajoutés par le code** (source, voix CC BY, musique
+  incrustée) : jamais oubliés ni inventés.
 
 ### Transitions et effets ponctuels (Phase 7)
 

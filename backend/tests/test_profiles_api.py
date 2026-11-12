@@ -26,7 +26,7 @@ def test_default_profiles_are_seeded(client: TestClient) -> None:
     assert sum(p["is_default"] for p in profiles) == 1
     assert profiles[0]["is_default"] and profiles[0]["name"] == "GTA 6 — Viral"
     assert all(set(p["weights"]) == set(CRITERIA) for p in profiles)
-    assert all(p["min_duration"] == 61 and p["max_duration"] == 180 for p in profiles)
+    assert all(p["min_duration"] == 61 and p["max_duration"] == 90 for p in profiles)
     assert client.get("/api/criteria").json()[0] == {"key": "hook", "label": "Force de l'accroche"}
 
 

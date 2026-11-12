@@ -1370,3 +1370,18 @@ details.tools[open] > summary {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Phase 8 : musique conseillée, publication */
+.music-banner {
+  border-left: 4px solid var(--accent);
+  margin: 0.5rem 0;
+}
+.copy-field {
+  margin-bottom: 0.75rem;
+}
+.copy-field input,
+.copy-field textarea {
+  width: 100%;
+  font: inherit;
+  resize: vertical;
+}

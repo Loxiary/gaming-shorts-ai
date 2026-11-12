@@ -32,7 +32,10 @@ CRITERIA: dict[str, str] = {
 }
 
 MIN_CLIP_SECONDS = 61.0  # contrainte impérative du cahier des charges
-MAX_CLIP_SECONDS = 180.0
+MAX_CLIP_SECONDS = 90.0  # 1 min 30 au plus (choix de l'utilisateur, 11/11/2026 ; 180 s avant)
+# Bornes des contraintes de la base : restent à 180 s pour ne pas invalider l'historique
+# (extraits déjà analysés plus longs) ; la limite effective est appliquée par le code.
+DB_MAX_CLIP_SECONDS = 180.0
 
 
 class EditingProfile(Base):
@@ -94,8 +97,10 @@ class EditingProfile(Base):
     game_level_db: Mapped[float] = mapped_column(
         Float, nullable=False, default=0.0, server_default="0"
     )
-    music_mode: Mapped[str] = mapped_column(  # « library » (bibliothèque locale) ou « off »
-        String(20), nullable=False, default="library", server_default="library"
+    # « suggest » : musique conseillée à ajouter à l'upload (bibliothèque de la plateforme) ;
+    # « library » : morceau de la bibliothèque locale incrusté ; « off ».
+    music_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="suggest", server_default="suggest"
     )
     music_level_db: Mapped[float] = mapped_column(
         Float, nullable=False, default=-18.0, server_default="-18"
@@ -108,6 +113,22 @@ class EditingProfile(Base):
     )
     facecam_mode: Mapped[str] = mapped_column(  # « crop » (exclure par recadrage) ou « off »
         String(20), nullable=False, default="crop", server_default="crop"
+    )
+    # Mots grossiers masqués dans les textes affichés (« pu**** »).
+    censor_profanity: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    # Bip sonore sur les mots grossiers prononcés (horodatage de la transcription).
+    bleep_profanity: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    # La voix lit le titre au début du short.
+    narration_title: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    # Sélection : confiance minimale de l'évaluation (0 à 1) en plus du seuil de note.
+    min_confidence: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.5, server_default="0.5"
     )
 
     # --- Transitions et effets ponctuels (Phase 7)
@@ -136,7 +157,7 @@ class EditingProfile(Base):
         CheckConstraint("threshold >= 0 AND threshold <= 100", name="threshold_range"),
         CheckConstraint("zoom_intensity >= 0 AND zoom_intensity <= 0.5", name="zoom_range"),
         CheckConstraint(
-            f"min_duration >= {MIN_CLIP_SECONDS} AND max_duration <= {MAX_CLIP_SECONDS} "
+            f"min_duration >= {MIN_CLIP_SECONDS} AND max_duration <= {DB_MAX_CLIP_SECONDS} "
             "AND min_duration <= max_duration",
             name="duration_bounds",
         ),
@@ -232,7 +253,7 @@ class ClipCandidate(Base):
         UniqueConstraint("analysis_id", "position", name="uq_clip_candidates_position"),
         CheckConstraint(
             f"end_seconds - start_seconds >= {MIN_CLIP_SECONDS - 0.001} "
-            f"AND end_seconds - start_seconds <= {MAX_CLIP_SECONDS + 0.001}",
+            f"AND end_seconds - start_seconds <= {DB_MAX_CLIP_SECONDS + 0.001}",
             name="duration_61_180",
         ),
     )

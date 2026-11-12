@@ -25,7 +25,7 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     weights: Object.fromEntries(criteria.map((c) => [c.key, 1])),
     output_language: "fr",
     min_duration: 61,
-    max_duration: 180,
+    max_duration: 90,
     max_candidates: 12,
     use_vision: true,
     is_default: false,
@@ -37,6 +37,8 @@ function emptyProfile(criteria: Criterion[]): ProfileInput {
     cta_enabled: true,
     cta_text: null,
     render_encoder: "libx264",
+    censor_profanity: true,
+    min_confidence: 0.5,
     ...DEFAULT_AUDIO,
     ...DEFAULT_EFFECTS,
   };
@@ -79,7 +81,7 @@ export function ProfilesPage() {
       </div>
       <p className="muted">
         Un profil fixe le seuil de sélection, l'importance de chaque critère dans la note globale,
-        l'angle éditorial transmis à l'IA et la durée des extraits (toujours entre 61 et 180 s).
+        l'angle éditorial transmis à l'IA et la durée des extraits (toujours entre 61 et 90 s).
       </p>
 
       <ProfilesTransfer />
@@ -231,11 +233,23 @@ function ProfileEditor({
             />
           </label>
           <label>
+            Confiance minimale (0–1)
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={data.min_confidence}
+              onChange={(e) => set("min_confidence", Number(e.target.value))}
+              title="Un extrait noté par l'IA avec une confiance plus faible n'est pas sélectionné"
+            />
+          </label>
+          <label>
             Durée min (s)
             <input
               type="number"
               min={61}
-              max={180}
+              max={90}
               value={data.min_duration}
               onChange={(e) => set("min_duration", Number(e.target.value))}
             />
@@ -245,7 +259,7 @@ function ProfileEditor({
             <input
               type="number"
               min={61}
-              max={180}
+              max={90}
               value={data.max_duration}
               onChange={(e) => set("max_duration", Number(e.target.value))}
             />
@@ -428,6 +442,22 @@ function MontageSettings({
           onChange={(e) => setStyle("uppercase", e.target.checked)}
         />
         Sous-titres en majuscules
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.censor_profanity}
+          onChange={(e) => set("censor_profanity", e.target.checked)}
+        />
+        Masquer les mots grossiers dans les textes (« pu**** »)
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.bleep_profanity}
+          onChange={(e) => set("bleep_profanity", e.target.checked)}
+        />
+        Bip sonore sur les mots grossiers prononcés
       </label>
       <label>
         Disposition

@@ -189,9 +189,10 @@ def make_bursty_video(
 class SpeechTranscriber(FakeTranscriber):
     """Une phrase toutes les 8 s sur toute la durée (mots horodatés)."""
 
-    def __init__(self, seconds: float) -> None:
+    def __init__(self, seconds: float, language: str = "fr") -> None:
         super().__init__()
         self.seconds = seconds
+        self.language = language
 
     def transcribe(self, audio_path, on_progress, check_cancel):  # type: ignore[no-untyped-def]
         base = super().transcribe(audio_path, on_progress, check_cancel)
@@ -206,7 +207,11 @@ class SpeechTranscriber(FakeTranscriber):
             t += 8
             i += 1
         return base.model_copy(
-            update={"segments": segments, "audio_duration_seconds": self.seconds}
+            update={
+                "segments": segments,
+                "audio_duration_seconds": self.seconds,
+                "language": self.language,
+            }
         )
 
 
@@ -282,6 +287,7 @@ class FakeEditor:
         self.calls: list[str] = []
         self.systems: list[str] = []
         self.hook_kind = hook_kind
+        self.hook_text = "Une partie qui démarre fort"
         self.narration = narration or []
         self.music_mood = music_mood
         self.effects = effects or []
@@ -318,7 +324,7 @@ class FakeEditor:
             )
         else:
             parsed = ed.EditorialPlan(
-                hook_text="Une partie qui démarre fort",
+                hook_text=self.hook_text,
                 hook_kind=self.hook_kind,
                 hook_reason="test",
                 cta_text="Tu aurais fait pareil ?",
@@ -333,6 +339,20 @@ class FakeEditor:
                     ed.EffectMoment(t=t, kind=k, duration=d, reason="test")  # type: ignore[arg-type]
                     for t, k, d in self.effects
                 ],
+                music_suggestion=ed.MusicSuggestion(
+                    mood="tendu",
+                    genre="trap",
+                    tempo="rapide",
+                    search_keywords=["dark trap", "tense"],
+                    why="Course-poursuite nerveuse.",
+                ),
+                publication=ed.Publication(
+                    context="Une partie de test qui démarre fort.",
+                    question="Tu aurais fait pareil ?",
+                    tiktok_caption="Le début est fou 😳",
+                    youtube_title="Une partie qui démarre fort",
+                    hashtags=["gta6", "#gaming", "#gaming", "#Shorts game"],
+                ),
             )
         if validate:
             validate(parsed)

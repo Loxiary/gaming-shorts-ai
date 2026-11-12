@@ -54,9 +54,18 @@ export function AudioSettings({
           value={data.narration_mode}
           onChange={(e) => set("narration_mode", e.target.value as ProfileInput["narration_mode"])}
         >
-          <option value="auto">Si l'IA la juge utile (lignes factuelles, dans les silences)</option>
+          <option value="auto">Titre lu au début + interventions de l'IA dans les silences</option>
           <option value="off">Jamais</option>
         </select>
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={data.narration_title}
+          disabled={data.narration_mode === "off"}
+          onChange={(e) => set("narration_title", e.target.checked)}
+        />
+        La voix lit le titre au début du short
       </label>
       <label>
         Voix
@@ -97,7 +106,12 @@ export function AudioSettings({
           value={data.music_mode}
           onChange={(e) => set("music_mode", e.target.value as ProfileInput["music_mode"])}
         >
-          <option value="library">Bibliothèque locale (licence confirmée uniquement)</option>
+          <option value="suggest">
+            Conseillée, à ajouter à l'upload (bibliothèque TikTok/YouTube)
+          </option>
+          <option value="library">
+            Incrustée depuis ma bibliothèque locale (licence confirmée)
+          </option>
           <option value="off">Aucune</option>
         </select>
       </label>

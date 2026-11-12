@@ -80,7 +80,7 @@ describe("Transitions et effets (Phase 7)", () => {
       weights: {},
       output_language: "fr",
       min_duration: 61,
-      max_duration: 180,
+      max_duration: 90,
       max_candidates: 12,
       use_vision: true,
       is_default: true,
@@ -100,6 +100,7 @@ describe("Transitions et effets (Phase 7)", () => {
       cta_enabled: true,
       cta_text: null,
       render_encoder: "libx264",
+      censor_profanity: true,
       ...DEFAULT_AUDIO,
       ...DEFAULT_EFFECTS,
       created_at: "2026-11-10T19:00:00Z",
@@ -120,6 +121,8 @@ describe("Transitions et effets (Phase 7)", () => {
     await user.selectOptions(screen.getByLabelText("Bruitages"), "off");
     expect(screen.getByLabelText(/Niveau des bruitages/)).toBeDisabled();
     await user.selectOptions(screen.getByLabelText("Effets (flash, tremblement)"), "off");
+    expect(screen.getByLabelText(/Durée max/)).toHaveAttribute("max", "90");
+    await user.click(screen.getByLabelText(/Masquer les mots grossiers/));
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => {
       const body = calls.find((c) => c.method === "PUT")?.body as Record<string, unknown>;
@@ -128,6 +131,7 @@ describe("Transitions et effets (Phase 7)", () => {
         transition_out: "fade",
         sfx_mode: "off",
         effects_mode: "off",
+        censor_profanity: false,
       });
     });
   });

@@ -203,7 +203,22 @@ exactement les bornes proposées.
 8. warnings : limites de l'analyse, risques (musique identifiable, contenu sensible, facecam \
 visible, passage incompréhensible…). Liste vide s'il n'y en a pas.
 9. Rédige summary, reason, justifications, descriptions d'événements et warnings en langue \
-« {ctx.language} »."""
+« {ctx.language} ».
+10. Consignes éditoriales du créateur, à appliquer dans les notes :
+   - Le langage grossier ou vulgaire est normal dans ce type de jeu (ex. GTA) : il est masqué \
+et couvert d'un bip au montage. Ne baisse AUCUNE note pour cela et ne le signale pas, sauf \
+propos haineux (insulte raciste, homophobe…) : signale-les alors dans warnings, sans baisser \
+les notes.
+   - L'interface du jeu (HUD, mini-carte, messages d'aide), les cinématiques et le filigrane \
+de la chaîne source ne sont pas des défauts : n'en tiens pas compte et ne les signale pas.
+   - L'identité visuelle d'AUTRES créateurs de contenu (facecam, logo ou pseudo d'une autre \
+chaîne, avatar, habillage de streamer) est un vrai problème : baisse originality et \
+av_quality et signale-le dans warnings.
+   - Une transcription lacunaire ou imparfaite n'est pas un défaut (des paroles peu claires \
+peuvent même susciter des commentaires) : ne baisse pas les notes pour cela.
+   - Le contexte peut être donné dans la description de publication : note standalone sur la \
+compréhension possible avec une ou deux phrases de contexte, et mets self_contained à false \
+seulement si même ainsi l'extrait reste incompréhensible."""
 
 
 def user_content(item: JudgeInput) -> list[dict[str, object]]:

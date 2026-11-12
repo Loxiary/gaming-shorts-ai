@@ -20,14 +20,19 @@ SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 
 @router.post(
     "/candidates/{candidate_id}/renders",
-    response_model=RenderOut,
+    response_model=BatchRenderOut,
     status_code=status.HTTP_201_CREATED,
 )
 def create_render(
     candidate_id: str, data: RenderCreate, session: SessionDep, settings: SettingsDep
-) -> RenderOut:
-    render = svc.create_render(session, candidate_id, data.profile_id)
-    return svc.render_to_out(session, settings, render)
+) -> BatchRenderOut:
+    """Un short par public : version française seule si la source est en français, sinon
+    version anglaise ET version française."""
+    renders = svc.create_render(session, candidate_id, data.profile_id)
+    return BatchRenderOut(
+        created=[svc.render_to_out(session, settings, r) for r in renders],
+        skipped_candidate_ids=[],
+    )
 
 
 @router.post(

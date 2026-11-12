@@ -119,7 +119,7 @@ def test_full_analysis_with_ai(
     cands = full["candidates"]
     assert cands and judge.calls == len(cands)
     for c in cands:
-        assert 61 <= c["duration_seconds"] <= 180
+        assert 61 <= c["duration_seconds"] <= 90
         assert c["status"] == "scored"
         assert len(c["scores"]) == 7 and c["overall_score"] == 80.0
         assert c["summary"] and c["reason"] and c["confidence"] == 0.8

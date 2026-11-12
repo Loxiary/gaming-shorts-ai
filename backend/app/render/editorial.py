@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-MAX_HOOK_CHARS = 60
+MAX_HOOK_CHARS = 50  # titre permanent en haut de l'écran, 2 lignes au plus
 MAX_CTA_CHARS = 70
 MAX_ZOOMS = 3
 MAX_NARRATION_LINES = 4
@@ -52,6 +52,26 @@ class EffectMoment(BaseModel):
     reason: str
 
 
+class MusicSuggestion(BaseModel):
+    """Musique à ajouter SOI-MÊME à l'upload, depuis la bibliothèque sonore de la plateforme."""
+
+    mood: str
+    genre: str
+    tempo: str
+    search_keywords: list[str]
+    why: str
+
+
+class Publication(BaseModel):
+    """Textes de publication rédigés par l'IA (les crédits sont ajoutés par le code)."""
+
+    context: str  # 1 à 2 phrases : ce qui se passe, pour compenser le contexte manquant
+    question: str  # question qui pousse à commenter
+    tiktok_caption: str
+    youtube_title: str
+    hashtags: list[str]
+
+
 class NarrationLine(BaseModel):
     t: float  # instant souhaité, secondes depuis le début du short
     text: str
@@ -72,6 +92,9 @@ class EditorialPlan(BaseModel):
     music_mood: str = ""
     # Phase 7 : effets ponctuels (vide pour les plans antérieurs et le plan de repli).
     effects: list[EffectMoment] = []
+    # Phase 8 : musique conseillée pour l'upload, textes de publication.
+    music_suggestion: MusicSuggestion | None = None
+    publication: Publication | None = None
 
 
 class TranslatedSentence(BaseModel):
@@ -131,7 +154,39 @@ def validate_plan(
         plan.music_mood = ""
     plan.effects, dropped = filter_effects(plan.effects, duration)
     plan.warnings += dropped
+    if plan.publication is not None:
+        plan.publication = clean_publication(plan.publication)
     return plan
+
+
+MAX_HASHTAGS = 5
+MAX_TIKTOK_CAPTION = 150
+MAX_YOUTUBE_TITLE = 90
+
+
+def clean_hashtags(tags: list[str]) -> list[str]:
+    out: list[str] = []
+    for t in tags:
+        t = re.sub(r"[^\w]", "", t.lstrip("#"), flags=re.UNICODE)
+        if t and f"#{t.lower()}" not in {o.lower() for o in out}:
+            out.append(f"#{t}")
+    return out[:MAX_HASHTAGS]
+
+
+def _cut(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def clean_publication(p: Publication) -> Publication:
+    """Normalise sans jamais rejeter : longueurs, hashtags (3 à 5, sans espace)."""
+    return Publication(
+        context=_cut(p.context, 300),
+        question=_cut(p.question, 150),
+        tiktok_caption=_cut(p.tiktok_caption, MAX_TIKTOK_CAPTION),
+        youtube_title=_cut(p.youtube_title, MAX_YOUTUBE_TITLE),
+        hashtags=clean_hashtags(p.hashtags),
+    )
 
 
 def filter_effects(
@@ -192,6 +247,8 @@ def editorial_system(
     narration: bool = False,
     music: bool = False,
     effects: bool = False,
+    music_suggest: bool = False,
+    publication: bool = False,
 ) -> str:
     lang = LANG_NAMES.get(language, language)
     effects_rule = (
@@ -207,16 +264,39 @@ impact ou une explosion). t en secondes depuis le début du short, au moins \
     )
     narration_rule = (
         f"""
-7. Narration (voix de synthèse ajoutée) : narration_needed = true UNIQUEMENT si une courte \
-narration apporte vraiment quelque chose (contexte indispensable absent, extrait sans parole, \
-enjeu à expliquer). Sinon false, narration vide : une narration inutile dégrade le short. \
-Si true : 1 à {MAX_NARRATION_LINES} lignes en {lang}, {MAX_NARRATION_CHARS} caractères maximum \
+7. Narration (voix de synthèse ajoutée, en plus du titre qu'elle lit déjà au début) : \
+narration_needed = true si de courtes interventions rendent le short plus vivant ou plus clair \
+(enjeu, contexte, réaction à un moment fort), JAMAIS pour répéter un dialogue ou les \
+sous-titres. Sinon false, narration vide. Si true : 1 à {MAX_NARRATION_LINES} lignes en \
+{lang}, {MAX_NARRATION_CHARS} caractères maximum \
 chacune, phrases simples faciles à prononcer, STRICTEMENT factuelles (seulement ce que \
 montrent la transcription et les moments fournis ; aucun chiffre, nom ou événement inventé). \
 t = instant souhaité en secondes depuis le début du short, placé dans un SILENCE de la \
 transcription (jamais par-dessus quelqu'un qui parle). narration_reason explique le choix."""
         if narration
         else "\n7. narration_needed = false, narration vide, narration_reason vide."
+    )
+    suggest_rule = (
+        """
+10. music_suggestion : musique de fond que le créateur ajoutera LUI-MÊME à l'upload depuis la \
+bibliothèque sonore de TikTok ou de YouTube (rien n'est incrusté dans la vidéo). mood \
+(ambiance), genre, tempo (lent, moyen, rapide), search_keywords (3 à 5 mots-clés de recherche, \
+en anglais, qui marchent dans ces bibliothèques, ex. « dark trap », « epic cinematic »), why \
+(une phrase). Ne cite AUCUN titre ni artiste précis : leur disponibilité n'est pas vérifiable."""
+        if music_suggest
+        else "\n10. music_suggestion : null."
+    )
+    publication_rule = (
+        f"""
+11. publication, en {lang}, ton décontracté gaming (tutoiement, énergique, quelques émojis), \
+sans aucune promesse mensongère ni mot grossier : context (1 à 2 phrases factuelles qui \
+expliquent la scène à quelqu'un qui n'a pas vu la vidéo complète), question (une question qui \
+pousse à commenter, liée au contenu réel), tiktok_caption (accroche de \
+{MAX_TIKTOK_CAPTION} caractères maximum, sans hashtag), youtube_title (titre YouTube Shorts \
+de {MAX_YOUTUBE_TITLE} caractères maximum, aguicheur mais honnête), hashtags (3 à \
+{MAX_HASHTAGS}, pertinents : jeu, genre, tendance gaming générique ; avec #)."""
+        if publication
+        else "\n11. publication : null."
     )
     music_rule = (
         "\n8. music_mood : ambiance d'une musique de fond discrète adaptée à l'extrait, parmi : "
@@ -231,15 +311,19 @@ transcription (jamais par-dessus quelqu'un qui parle). narration_reason explique
         else "Propose un appel à l'action court : une question à la communauté liée au contenu "
         "réel de l'extrait, ou une invitation à s'abonner."
     )
+    rules = narration_rule + music_rule + effects_rule + suggest_rule + publication_rule
     return f"""Tu prépares le montage d'un short vertical (TikTok, YouTube Shorts) à partir \
 d'un extrait de vidéo de jeu déjà sélectionné. Profil : {profile_name}. Angle : \
 {focus or "moments forts compréhensibles sans contexte"}.
 
 Consignes impératives :
-1. hook_text : accroche affichée pendant les 3 premières secondes, {MAX_HOOK_CHARS} caractères \
-maximum, en {lang}. Elle ne doit JAMAIS promettre ou suggérer un événement, un résultat ou une \
-émotion absents de l'extrait (pas de « vous n'allez pas croire… » si rien d'inattendu ne se \
-produit). hook_kind = « quote » seulement si hook_text reprend mot pour mot une phrase \
+1. hook_text : TITRE du short, affiché en gros en haut de l'écran pendant TOUTE la vidéo et \
+lu par une voix de synthèse au début. {MAX_HOOK_CHARS} caractères maximum, en {lang}. Il dit \
+brièvement ce qu'il y a dans la vidéo et doit être aguicheur : créer de la curiosité ou un \
+enjeu qui donne envie de regarder jusqu'au bout (question, situation tendue, défi, \
+retournement annoncé). Mais il ne doit JAMAIS promettre ou suggérer un événement, un résultat \
+ou une émotion absents de l'extrait (pas de « vous n'allez pas croire… » si rien d'inattendu \
+ne se produit). hook_kind = « quote » seulement si hook_text reprend mot pour mot une phrase \
 prononcée dans la transcription fournie (dans sa langue d'origine) ; sinon « original ».
 2. {cta_rule} {MAX_CTA_CHARS} caractères maximum, en {lang}.
 3. keywords : 3 à 10 mots isolés de la transcription à mettre en couleur (chiffres marquants, \
@@ -249,7 +333,8 @@ oralement forts. t en secondes depuis le début du short, durée de 1 à 3 s. Au
 mieux qu'un zoom gratuit.
 5. warnings : limites ou points de vigilance pour le montage (liste vide sinon).
 6. N'invente rien : appuie-toi uniquement sur la transcription, le résumé et les moments \
-fournis.{narration_rule}{music_rule}{effects_rule}"""
+fournis. N'écris aucun mot grossier ou vulgaire dans les textes que tu rédiges (accroche \
+originale, appel à l'action, narration).{rules}"""
 
 
 def editorial_content(

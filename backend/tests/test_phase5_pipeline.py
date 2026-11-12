@@ -205,6 +205,7 @@ def test_profile_accepts_audio_settings_and_rejects_unknown_voice(client: TestCl
 def test_full_phase5_render(
     client: TestClient, fast_settings: Settings, session_factory: sessionmaker[Session], video: Path
 ) -> None:
+    _profile_update(client, music_mode="library")  # musique incrustée (défaut : conseillée)
     _music_file(fast_settings)
     client.post("/api/music/scan")
     track = client.get("/api/music").json()[0]
@@ -286,6 +287,7 @@ def test_phase5_degrades_gracefully_without_models_or_library(
     client: TestClient, fast_settings: Settings, session_factory: sessionmaker[Session], video: Path
 ) -> None:
     """Sans modèles ni musique : le montage aboutit et le rapport dit ce qui n'a pas été fait."""
+    _profile_update(client, music_mode="library")
     worker = _worker(fast_settings, session_factory, video, FakeEditor(music_mood="calme"), None)
     _, cand = _candidate(client, worker)
     render = _render(client, worker, cand["id"])
@@ -293,7 +295,7 @@ def test_phase5_degrades_gracefully_without_models_or_library(
     assert render["facecam"]["status"] == "unavailable"
     audio = render["audio_report"]
     assert audio["source_music"]["status"] == "unavailable"
-    assert audio["narration"]["status"] == "not_needed"
+    assert audio["narration"]["status"] == "unavailable"  # le titre devait être lu
     assert audio["music"]["status"] == "empty_library"
     assert render["credits"] == []
     assert "Musique d'origine non analysée." in render["export_warnings"]

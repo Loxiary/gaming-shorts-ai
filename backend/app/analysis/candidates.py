@@ -1,7 +1,7 @@
-"""Proposition de fenêtres candidates (61–180 s) et sélection finale.
+"""Proposition de fenêtres candidates (61–90 s) et sélection finale.
 
 Règles du cahier des charges (§5, §7) appliquées ici :
-- toute fenêtre dure STRICTEMENT entre min et max (61–180 s par défaut) ;
+- toute fenêtre dure STRICTEMENT entre min et max (61–90 s par défaut) ;
 - une vidéo trop courte ne produit aucun candidat (pas d'extrait fabriqué) ;
 - bornes calées autant que possible sur des débuts/fins de phrase ou des coupes ;
 - doublons et chevauchements excessifs éliminés.
@@ -64,7 +64,9 @@ def generate_windows(
         return []
     s_starts, s_ends = sorted(set(sentence_starts)), sorted(set(sentence_ends))
     cuts = sorted(set(scene_cuts))
-    lengths = sorted({min(max(x, min_duration), max_duration) for x in (75.0, 105.0, 150.0)})
+    lengths = sorted(
+        {min(max(x, min_duration), max_duration) for x in (66.0, 75.0, 85.0, 105.0, 150.0)}
+    )
 
     def pick_start(target: float, latest: float) -> tuple[float, bool]:
         # Priorité aux débuts de phrase ; les coupes de scène ne servent qu'à défaut
@@ -128,10 +130,14 @@ class SelectionItem:
     end: float
     overall: float | None
     eligible: bool  # noté (IA ou signaux), pas en échec
+    confidence: float | None = None  # confiance de l'IA ; None = non applicable (signaux seuls)
 
 
 def select(
-    items: list[SelectionItem], threshold: float, max_overlap: float = 0.3
+    items: list[SelectionItem],
+    threshold: float,
+    max_overlap: float = 0.3,
+    min_confidence: float = 0.0,
 ) -> dict[str, tuple[bool, str | None]]:
     """Retourne {id: (sélectionné, raison du rejet)}.
 
@@ -144,6 +150,12 @@ def select(
             result[item.id] = (False, "Non évalué")
         elif item.overall < threshold:
             result[item.id] = (False, f"Sous le seuil ({item.overall:.0f} < {threshold:.0f})")
+        elif item.confidence is not None and item.confidence < min_confidence:
+            result[item.id] = (
+                False,
+                f"Confiance de l'évaluation trop faible ({item.confidence:.2f} < "
+                f"{min_confidence:.2f})",
+            )
         elif any(
             overlap_ratio((item.start, item.end), (k.start, k.end)) > max_overlap for k in kept
         ):

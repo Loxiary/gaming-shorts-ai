@@ -44,7 +44,7 @@ FEATURES = [
         note="Signaux locaux, sans coût",
     ),
     FeatureStatusOut(
-        name="Détection, score et sélection des clips (61–180 s)",
+        name="Détection, score et sélection des clips (61–90 s)",
         available=True,
         note="IA Claude (clé API requise) ou estimation par signaux",
     ),

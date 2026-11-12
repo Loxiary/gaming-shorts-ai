@@ -28,6 +28,8 @@ class ClipRender(Base):
     start_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     end_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     profile_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    # Public visé : « fr » ou « en » (titre, voix, sous-titres, publication dans cette langue).
+    audience_language: Mapped[str | None] = mapped_column(String(5))
     candidate_snapshot_json: Mapped[str | None] = mapped_column(Text)
 
     # Plan éditorial : accroche, appel à l'action, mots clés, zooms (IA ou repli).
@@ -47,6 +49,8 @@ class ClipRender(Base):
     audio_report_json: Mapped[str | None] = mapped_column(Text)
     facecam_json: Mapped[str | None] = mapped_column(Text)
     credits_json: Mapped[str | None] = mapped_column(Text)
+    # Textes de publication (TikTok, YouTube) et musique conseillée à l'upload.
+    publication_json: Mapped[str | None] = mapped_column(Text)
     preview_audio_path: Mapped[str | None] = mapped_column(String(500))
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     # Phase 6 : fichiers supprimés par le nettoyage (la fiche et les rapports restent).

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { Publication } from "../features/render/PublicationView";
 import { request } from "./api";
 import { POLL_MS } from "./queries";
 
@@ -126,6 +127,8 @@ export interface Render {
   credits?: Credit[];
   preview_audio_url?: string | null;
   files_purged?: boolean;
+  audience_language?: string | null;
+  publication?: Publication | null;
   export_warnings: string[];
   ready: boolean;
   cost_usd: number;
@@ -138,7 +141,11 @@ export interface Render {
 
 export const renderApi = {
   create: (candidateId: string) =>
-    request<Render>("POST", `/api/candidates/${enc(candidateId)}/renders`, {}),
+    request<{ created: Render[]; skipped_candidate_ids: string[] }>(
+      "POST",
+      `/api/candidates/${enc(candidateId)}/renders`,
+      {},
+    ),
   list: (projectId: string) => request<Render[]>("GET", `/api/projects/${enc(projectId)}/renders`),
   confirmExport: (id: string) =>
     request<Render>("POST", `/api/renders/${enc(id)}/confirm-export`, { acknowledged: true }),

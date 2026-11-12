@@ -168,7 +168,9 @@ def apply_selection(
     """Recalcule les notes globales et la sélection (sans nouvel appel à l'IA)."""
     if threshold is not None:
         analysis.threshold = threshold
-    weights = json.loads(analysis.profile_snapshot_json)["weights"]
+    snapshot = json.loads(analysis.profile_snapshot_json)
+    weights = snapshot["weights"]
+    min_confidence = float(snapshot.get("min_confidence", 0.0))
     items: list[SelectionItem] = []
     for c in analysis.candidates:
         scored = c.status in {"scored", "signals_only"} and c.scores
@@ -176,9 +178,16 @@ def apply_selection(
             weighted_score({s.criterion: s.score for s in c.scores}, weights) if scored else None
         )
         items.append(
-            SelectionItem(c.id, c.start_seconds, c.end_seconds, c.overall_score, bool(scored))
+            SelectionItem(
+                c.id,
+                c.start_seconds,
+                c.end_seconds,
+                c.overall_score,
+                bool(scored),
+                c.confidence if c.status == "scored" else None,
+            )
         )
-    decisions = select_items(items, analysis.threshold)
+    decisions = select_items(items, analysis.threshold, min_confidence=min_confidence)
     for c in analysis.candidates:
         c.selected, c.rejection_reason = decisions[c.id]
     session.commit()

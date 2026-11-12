@@ -65,7 +65,7 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div className="phase-banner" role="note">
-            <strong>Phase 7.</strong> Import, transcription, détection, montage vertical
+            <strong>Phase 8.</strong> Import, transcription, détection, montage vertical
             (transitions, effets), audio, facecam, file avec pause, stockage et sauvegardes. Rien
             n'est publié automatiquement : l'export reste votre décision.
           </div>

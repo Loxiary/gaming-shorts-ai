@@ -32,11 +32,15 @@ export interface Profile {
   narration_speed: number;
   narration_level_db: number;
   game_level_db: number;
-  music_mode: "library" | "off";
+  music_mode: "suggest" | "library" | "off";
   music_level_db: number;
   source_music_mode: "attenuate" | "detect" | "off";
   source_music_reduction_db: number;
   facecam_mode: "crop" | "off";
+  censor_profanity: boolean;
+  bleep_profanity: boolean;
+  narration_title: boolean;
+  min_confidence: number;
   // Transitions et effets ponctuels (Phase 7).
   effects_mode: "auto" | "off";
   transition_in: "none" | "fade" | "zoom";

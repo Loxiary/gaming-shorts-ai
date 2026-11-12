@@ -224,3 +224,23 @@ def loop_to(music: np.ndarray, n: int, sr: int, fade: float = 1.5) -> np.ndarray
 def rms_db(audio: np.ndarray) -> float:
     v = float(np.sqrt(np.mean(np.square(audio)))) if audio.size else 0.0
     return 20 * np.log10(max(v, 1e-9))
+
+
+def beep_track(
+    intervals: list[tuple[float, float]], n: int, sr: int = SR, freq: float = 1000.0
+) -> np.ndarray:
+    """Bip de censure (sinus 1 kHz, 5 ms de fondu aux bords) sur chaque intervalle."""
+    track = np.zeros((2, n), dtype=np.float32)
+    for a, b in intervals:
+        i, j = int(a * sr), min(int(b * sr), n)
+        if j <= i:
+            continue
+        t = np.arange(j - i) / sr
+        tone = 0.25 * np.sin(2 * np.pi * freq * t)
+        k = min(int(0.005 * sr), (j - i) // 2)
+        if k > 0:
+            ramp = np.linspace(0, 1, k)
+            tone[:k] *= ramp
+            tone[-k:] *= ramp[::-1]
+        track[:, i:j] += tone.astype(np.float32)
+    return track

@@ -13,8 +13,8 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Gaming Shorts AI"
-APP_VERSION = "0.7.0"
-APP_PHASE = "Phase 7 — transitions et effets"
+APP_VERSION = "0.8.0"
+APP_PHASE = "Phase 8 — titre, voix, publication"
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent

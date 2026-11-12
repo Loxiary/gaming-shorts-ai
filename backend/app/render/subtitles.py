@@ -123,8 +123,9 @@ def _ts(t: float) -> str:
 
 
 def _hook_size(text: str, base: int) -> int:
+    """Titre : le plus gros possible en restant sur deux lignes de 1080 px."""
     n = len(text)
-    return base if n <= 18 else int(base * 0.86) if n <= 34 else int(base * 0.74)
+    return base if n <= 18 else int(base * 0.9) if n <= 34 else int(base * 0.78)
 
 
 def build_ass(
@@ -146,6 +147,7 @@ def build_ass(
     base = ass_inline_color(style["text_color"])
     keyset = {normalize_word(k) for k in keywords}
     sub_margin = 520 if layout == "blur" else 380
+    cta_margin = 200 if layout == "blur" else 140  # en bas, sous les sous-titres
     accent_box = ass_color("#7C5CFF")  # fond de l'accroche
     cta_box = ass_color("#000000", alpha=0x30)
 
@@ -159,8 +161,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Sub,{font},{size},{text_c},{text_c},&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,2,70,70,{sub_margin},1
-Style: Hook,{font},{_hook_size(hook or "", 70)},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,16,0,8,90,90,240,1
-Style: Cta,{font},60,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,16,0,8,90,90,240,1
+Style: Hook,{font},{_hook_size(hook or "", 100)},&H00FFFFFF,&H00FFFFFF,{accent_box},{accent_box},-1,0,0,0,100,100,0,0,3,18,0,8,60,60,150,1
+Style: Cta,{font},58,&H00FFFFFF,&H00FFFFFF,{cta_box},{cta_box},-1,0,0,0,100,100,0,0,3,14,0,2,90,90,{cta_margin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -192,12 +194,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             )
 
     if hook:
-        end = min(HOOK_SECONDS, duration)
+        # Titre affiché pendant TOUTE la vidéo (et lu par la voix au début).
         lines.append(
-            f"Dialogue: 2,{_ts(0)},{_ts(end)},Hook,,0,0,0,,{{\\fad(150,250)}}{_escape(hook)}"
+            f"Dialogue: 2,{_ts(0)},{_ts(duration)},Hook,,0,0,0,,{{\\fad(150,0)}}{_escape(hook)}"
         )
     if cta:
-        start = max(duration - CTA_SECONDS, HOOK_SECONDS if hook else 0.0)
+        start = max(duration - CTA_SECONDS, 0.0)
         lines.append(
             f"Dialogue: 2,{_ts(start)},{_ts(duration)},Cta,,0,0,0,,{{\\fad(250,0)}}{_escape(cta)}"
         )

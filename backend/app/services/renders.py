@@ -18,12 +18,16 @@ from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.time import utcnow
 from app.models import (
     ACTIVE_JOB_STATUSES,
+    MAX_CLIP_SECONDS,
     ClipAnalysis,
     ClipCandidate,
     ClipRender,
     Job,
     JobStatus,
+    SourceMedia,
+    Transcript,
 )
+from app.models_registry import PIPER_VOICES
 from app.render.risk import export_warnings
 from app.schemas.render import RenderOut
 from app.services import profiles as profile_svc
@@ -38,22 +42,69 @@ def _loads(value: str | None, default: Any) -> Any:
     return json.loads(value) if value else default
 
 
-def create_render(session: Session, candidate_id: str, profile_id: str | None) -> ClipRender:
+AUDIENCE_NAMES = {"fr": "française", "en": "anglaise"}
+
+
+def source_language(session: Session, project_id: str) -> str | None:
+    lang = session.scalar(
+        select(Transcript.language)
+        .join(SourceMedia, SourceMedia.id == Transcript.source_media_id)
+        .where(SourceMedia.project_id == project_id, Transcript.kind == "source")
+        .order_by(Transcript.created_at.desc())
+        .limit(1)
+    )
+    return (lang or "").lower()[:2] or None
+
+
+def audiences(src_lang: str | None) -> list[str]:
+    """Source en français (ou langue inconnue) : une version française. Sinon : une version
+    anglaise (public anglophone) ET une version française."""
+    return ["fr"] if src_lang in (None, "fr") else ["en", "fr"]
+
+
+def audience_profile(base: dict[str, Any], lang: str, src_lang: str | None) -> dict[str, Any]:
+    """Profil adapté au public : titre, voix, sous-titres et publication dans sa langue."""
+    p = dict(base)
+    p["output_language"] = lang
+    p["audience_language"] = lang
+    if p.get("subtitle_mode") != "off":
+        p["subtitle_mode"] = "source" if lang == src_lang else "translate"
+    voice = str(p.get("narration_voice") or "")
+    if voice.split("_")[0] != lang:
+        same = [v for v in PIPER_VOICES if v.split("_")[0] == lang]
+        if same:
+            p["narration_voice"] = same[0]
+    return p
+
+
+def create_render(session: Session, candidate_id: str, profile_id: str | None) -> list[ClipRender]:
+    """Un montage par public : français seul si la source est en français, sinon anglais ET
+    français. Un public dont le montage est déjà en attente ou en cours est ignoré."""
     candidate = session.get(ClipCandidate, candidate_id)
     if candidate is None:
         raise NotFoundError("Extrait introuvable.")
     analysis = candidate.analysis
     if candidate.status not in {"scored", "signals_only"}:
         raise AppError("Cet extrait n'a pas été évalué : il ne peut pas être monté.")
-    active = session.scalar(
-        select(ClipRender.id)
-        .join(Job, Job.id == ClipRender.job_id)
-        .where(
-            ClipRender.candidate_id == candidate_id,
-            Job.status.in_(ACTIVE_JOB_STATUSES),
+    length = candidate.end_seconds - candidate.start_seconds
+    if length > MAX_CLIP_SECONDS + 0.05:
+        raise AppError(
+            f"Cet extrait dure {length:.0f} s, au-delà du maximum de {MAX_CLIP_SECONDS:.0f} s : "
+            "relancez l'analyse du projet pour obtenir des extraits plus courts."
+        )
+    active_langs = set(
+        session.scalars(
+            select(ClipRender.audience_language)
+            .join(Job, Job.id == ClipRender.job_id)
+            .where(
+                ClipRender.candidate_id == candidate_id,
+                Job.status.in_(ACTIVE_JOB_STATUSES),
+            )
         )
     )
-    if active:
+    src_lang = source_language(session, analysis.project_id)
+    wanted = [lang for lang in audiences(src_lang) if lang not in active_langs]
+    if not wanted or None in active_langs:
         raise ConflictError("Un montage de cet extrait est déjà en attente ou en cours.")
     if profile_id:
         profile_snapshot = profile_svc.snapshot(profile_svc.get_profile(session, profile_id))
@@ -64,20 +115,34 @@ def create_render(session: Session, candidate_id: str, profile_id: str | None) -
     else:
         profile_snapshot = json.loads(analysis.profile_snapshot_json)
 
-    job = enqueue_job(session, analysis.project_id, "render_clip", internal=True)
-    render = ClipRender(
-        project_id=analysis.project_id,
-        candidate_id=candidate.id,
-        job_id=job.id,
-        start_seconds=candidate.start_seconds,
-        end_seconds=candidate.end_seconds,
-        profile_snapshot_json=json.dumps(profile_snapshot, ensure_ascii=False),
-        candidate_snapshot_json=candidate_to_out(candidate).model_dump_json(),
-    )
-    session.add(render)
-    session.commit()
-    logger.info("Montage demandé", extra={"project_id": analysis.project_id, "job_id": job.id})
-    return render
+    renders: list[ClipRender] = []
+    for lang in wanted:
+        job = enqueue_job(session, analysis.project_id, "render_clip", internal=True)
+        render = ClipRender(
+            project_id=analysis.project_id,
+            candidate_id=candidate.id,
+            job_id=job.id,
+            start_seconds=candidate.start_seconds,
+            end_seconds=candidate.end_seconds,
+            audience_language=lang,
+            profile_snapshot_json=json.dumps(
+                audience_profile(profile_snapshot, lang, src_lang), ensure_ascii=False
+            ),
+            candidate_snapshot_json=candidate_to_out(candidate).model_dump_json(),
+        )
+        session.add(render)
+        session.commit()
+        renders.append(render)
+        logger.info(
+            "Montage demandé (version %s)",
+            AUDIENCE_NAMES.get(lang, lang),
+            extra={"project_id": analysis.project_id, "job_id": job.id},
+        )
+    return renders
+
+
+def _too_long(c: ClipCandidate) -> bool:
+    return c.end_seconds - c.start_seconds > MAX_CLIP_SECONDS + 0.05
 
 
 def create_renders_for_selection(
@@ -109,10 +174,10 @@ def create_renders_for_selection(
                 | Job.status.in_((*ACTIVE_JOB_STATUSES, JobStatus.COMPLETED)),
             )
         )
-        if existing:
+        if existing or _too_long(c):
             skipped.append(c.id)
             continue
-        created.append(create_render(session, c.id, profile_id))
+        created += create_render(session, c.id, profile_id)
     return created, skipped
 
 
@@ -185,6 +250,8 @@ def render_to_out(session: Session, settings: Settings, r: ClipRender) -> Render
         ),
         export_warnings=export_warnings(risk, qc) if risk else [],
         files_purged=r.files_purged,
+        audience_language=r.audience_language,
+        publication=_loads(r.publication_json, None),
         ready=ready,
         cost_usd=round(r.cost_usd, 4),
         export_status=r.export_status,
@@ -234,7 +301,8 @@ def confirm_export(
     src = video_path(session, settings, render_id)
     source = get_source(session, r.project_id)
     title = source.title if source and source.title else "short"
-    name = f"{utcnow():%Y%m%d-%H%M}_{_slug(title)}_{int(r.start_seconds)}s"
+    lang = f"_{r.audience_language}" if r.audience_language else ""
+    name = f"{utcnow():%Y%m%d-%H%M}_{_slug(title)}_{int(r.start_seconds)}s{lang}"
     dest_dir = settings.subdir("exports")
     dest = dest_dir / f"{name}.mp4"
     n = 2
@@ -253,6 +321,7 @@ def confirm_export(
         "source": risk.get("source"),
         "rights": risk.get("rights"),
         "excerpt": {"start_seconds": r.start_seconds, "end_seconds": r.end_seconds},
+        "audience_language": r.audience_language,
         "plan": _loads(r.plan_json, None),
         "subtitles": {
             "language": r.subtitle_language,
@@ -261,6 +330,7 @@ def confirm_export(
         "audio": _loads(r.audio_report_json, None),
         "facecam": _loads(r.facecam_json, None),
         "credits": _loads(r.credits_json, []),
+        "publication": _loads(r.publication_json, None),
         "quality_check": qc,
         "risk_report": risk,
         "acknowledged_warnings": warnings,

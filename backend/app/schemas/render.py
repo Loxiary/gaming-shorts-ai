@@ -44,6 +44,8 @@ class RenderOut(BaseModel):
     credits: list[dict[str, Any]] = []
     preview_audio_url: str | None = None
     files_purged: bool = False
+    audience_language: str | None = None
+    publication: dict[str, Any] | None = None
     export_warnings: list[str]
     ready: bool
     cost_usd: float

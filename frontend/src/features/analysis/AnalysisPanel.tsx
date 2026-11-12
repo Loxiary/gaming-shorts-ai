@@ -249,9 +249,12 @@ function AnalysisResults({
           {errorMessage(createRender.error)}
         </p>
       )}
-      {createRender.isSuccess && (
+      {createRender.data && (
         <p className="note" role="status">
-          Montage ajouté à la file : suivez-le dans « Shorts montés » plus bas.
+          {createRender.data.created.length > 1
+            ? `${createRender.data.created.length} montages ajoutés à la file (version anglaise et version française)`
+            : "Montage ajouté à la file"}{" "}
+          : suivez-les dans « Shorts montés » plus bas.
         </p>
       )}
       <div className="candidate-list">

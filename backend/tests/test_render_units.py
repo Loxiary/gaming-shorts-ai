@@ -76,7 +76,7 @@ def test_ass_escapes_text_and_places_hook_and_cta() -> None:
     )
     assert "\\pos" not in ass  # aucune balise injectée depuis le texte
     assert "Accroche (test)" in ass
-    assert "Dialogue: 2,0:00:00.00,0:00:03.00,Hook" in ass
+    assert "Dialogue: 2,0:00:00.00,0:01:10.00,Hook" in ass
     assert "Dialogue: 2,0:01:06.00,0:01:10.00,Cta" in ass
     assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
     assert "{\\c&HFFE138&}3000" in ass  # mot clé en couleur
