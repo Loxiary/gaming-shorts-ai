@@ -122,7 +122,7 @@ class EditingProfile(Base):
     bleep_profanity: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
-    # Facecam « réaction » (vidéo commune en boucle) incrustée en bas à gauche.
+    # Facecam « réaction » (vidéo commune en boucle) incrustée en haut à droite.
     react_overlay: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )

@@ -339,7 +339,6 @@ def preparing_subtitles(ctx: StepContext) -> dict[str, Any]:
         cta=plan.cta_text or None,
         duration=duration,
         layout=profile.get("layout", "blur"),
-        react=_react(ctx, profile) is not None,
     )
     (_workdir(ctx, render_id) / "subtitles.ass").write_text(ass, encoding="utf-8")
 

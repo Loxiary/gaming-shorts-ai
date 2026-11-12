@@ -11,13 +11,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.render.ffmpeg_render import (
-    REACT_MARGIN_BOTTOM,
     REACT_MARGIN_X,
+    REACT_MIN_TOP,
     REACT_RING,
     filter_graph,
     react_graph,
 )
-from app.render.subtitles import build_ass
 from tests.fakes import FakeEditor, make_bursty_video, requires_ffmpeg
 
 
@@ -39,33 +38,9 @@ def test_react_graph_crops_a_disk_with_a_yellow_ring() -> None:
     )
     # Incrustée après le gameplay (et ses effets), avant les textes qui restent au-dessus.
     assert "[base];[2:v]" in full
-    assert f"[base][react]overlay=x={REACT_MARGIN_X}:y=H-h-{REACT_MARGIN_BOTTOM}" in full
+    # En haut à droite, centre sur le bord supérieur du gameplay 16:9 (y = 656), sous le titre.
+    assert f"[base][react]overlay=x=W-w-{REACT_MARGIN_X}:y='max({REACT_MIN_TOP},656-h/2)'" in full
     assert full.index("[base][react]overlay") < full.index("ass=s.ass")
-
-
-def test_cta_moves_right_when_react_is_shown() -> None:
-    def cta_style(react: bool) -> str:
-        ass = build_ass(
-            cues=[],
-            style={
-                "font": "Arial",
-                "size": 70,
-                "text_color": "#FFFFFF",
-                "highlight_color": "#FFFF00",
-                "keyword_color": "#00FFFF",
-                "uppercase": True,
-                "max_words": 3,
-            },
-            keywords=[],
-            hook=None,
-            cta="Abonne-toi",
-            duration=70,
-            layout="fill",
-            react=react,
-        )
-        return next(line for line in ass.splitlines() if line.startswith("Style: Cta"))
-
-    assert ",450,60,140," in cta_style(True) and ",90,60,140," in cta_style(False)
 
 
 def _react_video(settings: Settings, seconds: float = 20) -> Path:
@@ -151,11 +126,14 @@ def test_render_with_looping_react_facecam(
     )
     ring = REACT_RING // 2
     diameter = migrated.react_diameter + 2 * REACT_RING
-    cy = 1920 - REACT_MARGIN_BOTTOM - diameter // 2
+    # Vidéo de test 4:3 (320×240) : gameplay de 810 px, haut à 555 → cercle plaqué sous le titre.
+    top = max(REACT_MIN_TOP, (1920 - 810) // 2 - diameter // 2)
+    cy = top + diameter // 2
+    right = 1080 - REACT_MARGIN_X
     for t in (5.0, render["duration_seconds"] - 3):  # avant et après la fin de la vidéo (boucle)
-        r, g, b = _pixel(short, t, REACT_MARGIN_X + ring, cy)  # bord gauche : contour jaune
+        r, g, b = _pixel(short, t, right - diameter + ring, cy)  # bord gauche : contour jaune
         assert r > 200 and g > 170 and b < 90, (t, r, g, b)
-        r, g, b = _pixel(short, t, REACT_MARGIN_X + diameter // 2, cy)  # centre : la vidéo
+        r, g, b = _pixel(short, t, right - diameter // 2, cy)  # centre : la vidéo
         assert g > r and g > b, (t, r, g, b)
     assert not any("Facecam réaction" in w for w in render["plan"]["warnings"])
 

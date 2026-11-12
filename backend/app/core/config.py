@@ -77,7 +77,8 @@ class Settings(BaseSettings):
     )
 
     # --- Facecam « réaction » incrustée (Phase 9) : même vidéo pour tous les shorts, en boucle,
-    # sans son, en bas à gauche, dans un cercle à contour jaune. Chemin relatif à data_dir.
+    # sans son, en haut à droite sous le titre, dans un cercle à contour jaune.
+    # Chemin relatif à data_dir.
     react_video: str = "facecam/facerig_cam.mp4"
     react_center_x: float = Field(default=0.43, ge=0, le=1)  # centre du visage (fraction)
     react_center_y: float = Field(default=0.50, ge=0, le=1)

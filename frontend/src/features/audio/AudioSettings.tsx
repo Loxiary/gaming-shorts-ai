@@ -168,8 +168,8 @@ export function AudioSettings({
           checked={data.react_overlay}
           onChange={(e) => set("react_overlay", e.target.checked)}
         />
-        Facecam « réaction » ronde en bas à gauche (vidéo commune en boucle, sans son ; cadrage dans
-        Paramètres)
+        Facecam « réaction » ronde en haut à droite (vidéo commune en boucle, sans son ; cadrage
+        dans Paramètres)
       </label>
     </fieldset>
   );

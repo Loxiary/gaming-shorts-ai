@@ -181,12 +181,13 @@ Réglages décidés avec l'utilisateur le 11/11/2026 :
 
 Une même vidéo (par défaut `GSA_DATA_DIRacecamacerig_cam.mp4`, réglable avec
 `GSA_REACT_VIDEO`) est incrustée dans chaque short pour attirer l'œil : **ronde, contour jaune,
-en bas à gauche**, par-dessus le gameplay et sous les textes (non affectée par le flash ni le
+en haut à droite sous le titre**, le centre du cercle sur le bord supérieur du gameplay (elle
+en recouvre la moitié), sous les textes (non affectée par le flash ni le
 tremblement). Elle **boucle** si le short est plus long qu'elle ; son éventuelle piste audio est
 ignorée ; ses réactions ne sont pas synchronisées avec le gameplay. Le cadrage sur le visage
 (centre 0,43 / 0,50, carré pleine hauteur) et le diamètre (360 px) se règlent dans
 Paramètres > Réglages globaux > « Facecam réaction » ; l'incrustation s'active par profil.
-L'appel à l'action se décale vers la droite pour ne pas la chevaucher. Si la vidéo est absente,
+Si la vidéo est absente,
 le short est monté sans, et c'est signalé dans le plan.
 
 ### Transitions et effets ponctuels (Phase 7)

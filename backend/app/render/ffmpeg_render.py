@@ -86,8 +86,9 @@ def effects_chain(
 
 REACT_RING = 9  # épaisseur du contour jaune (px)
 REACT_RING_COLOR = "0xFFD000"
-REACT_MARGIN_X = 40
-REACT_MARGIN_BOTTOM = 110
+REACT_MARGIN_X = 40  # depuis le bord DROIT
+REACT_MIN_TOP = 420  # toujours sous le titre (2 lignes au plus en haut de l'écran)
+FILL_REF_TOP = 656  # plein cadre : même hauteur qu'un gameplay 16:9 sur fond flouté
 
 
 def react_graph(*, index: int, fps: float, cx: float, cy: float, zoom: float, diameter: int) -> str:
@@ -142,6 +143,7 @@ def filter_graph(
             f":x='iw*{cx:.4f}':y='ih*{cy:.4f}'"
         )
         src_w, src_h = max(int(src_w * cw), 2), max(int(src_h * ch), 2)
+    gameplay_top = FILL_REF_TOP
     if layout == "fill":
         video = (
             f"[0:v]{pre},scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
@@ -150,6 +152,7 @@ def filter_graph(
     else:
         fg_h = int(round(OUT_W * src_h / src_w / 2) * 2)
         fg_h = min(fg_h, OUT_H)
+        gameplay_top = (OUT_H - fg_h) // 2
         video = (
             f"[0:v]{pre},split=2[bg][fg];"
             f"[bg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
@@ -160,8 +163,10 @@ def filter_graph(
     return (
         f"{video}{',' + effects if effects else ''}"
         + (
-            f"[base];{react};[base][react]overlay=x={REACT_MARGIN_X}"
-            f":y=H-h-{REACT_MARGIN_BOTTOM}:shortest=1"
+            # En haut à droite, sous le titre : le centre du cercle sur le bord supérieur du
+            # gameplay (la facecam en recouvre la moitié).
+            f"[base];{react};[base][react]overlay=x=W-w-{REACT_MARGIN_X}"
+            f":y='max({REACT_MIN_TOP},{gameplay_top}-h/2)':shortest=1"
             if react
             else ""
         )
